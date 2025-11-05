@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/green-aqi-navigator/src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "webpack": true,
+    "tsConfigPath": "apps/green-aqi-navigator/tsconfig.app.json"
+  },
+  "monorepo": true,
+  "root": "apps/green-aqi-navigator",
+  "projects": {
+    "api-gateway": {
+      "type": "application",
+      "root": "apps/api-gateway",
+      "entryFile": "main",
+      "sourceRoot": "apps/api-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
+      }
+    },
+    "aqi-service": {
+      "type": "application",
+      "root": "apps/aqi-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/aqi-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/aqi-service/tsconfig.app.json"
+      }
+    },
+    "auth-service": {
+      "type": "application",
+      "root": "apps/auth-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/auth-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/auth-service/tsconfig.app.json"
+      }
+    },
+    "green-aqi-navigator": {
+      "type": "application",
+      "root": "apps/green-aqi-navigator",
+      "entryFile": "main",
+      "sourceRoot": "apps/green-aqi-navigator/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/green-aqi-navigator/tsconfig.app.json"
+      }
+    },
+    "user-data-service": {
+      "type": "application",
+      "root": "apps/user-data-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/user-data-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user-data-service/tsconfig.app.json"
+      }
+    }
+  }
+}
