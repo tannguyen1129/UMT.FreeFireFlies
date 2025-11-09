@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # Cơ sở dữ liệu cho Orion-LD
+  mongo:
+    image: mongo:5.0
+    container_name: fiware-mongo
+    ports:
+      - "27018:27017" # Mở cổng Mongo (nếu cần debug)
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - fiware
+
+  # FIWARE Orion-LD Context Broker
+  orion:
+    image: fiware/orion-ld
+    container_name: fiware-orion
+    ports:
+      - "1026:1026" # Cổng API NGSI-LD chuẩn
+    depends_on:
+      - mongo
+    command: -dbhost mongo -logLevel DEBUG
+    networks:
+      - fiware
+
+networks:
+  fiware:
+    driver: bridge
+
+volumes:
+  mongo_data:

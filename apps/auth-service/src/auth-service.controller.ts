@@ -1,12 +1,23 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe } from '@nestjs/common';
 import { AuthServiceService } from './auth-service.service';
+import { RegisterUserDto } from './dto/register-user.dto';
+import { User } from './entities/user.entity'; 
+import { LoginUserDto } from './dto/login-user.dto';
 
-@Controller()
+@Controller('auth') 
 export class AuthServiceController {
   constructor(private readonly authServiceService: AuthServiceService) {}
 
-  @Get()
-  getHello(): string {
-    return this.authServiceService.getHello();
+  @Post('register') 
+  async register(
+    @Body(new ValidationPipe()) registerDto: RegisterUserDto,
+  ): Promise<Omit<User, 'password_hash'>> { 
+    return this.authServiceService.register(registerDto);
   }
+
+  @Post('login') // Tạo endpoint: POST /auth/login
+  async login(@Body(new ValidationPipe()) loginDto: LoginUserDto) {
+    return this.authServiceService.login(loginDto);
+  }
+
 }
