@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthServiceController } from './auth-service.controller';
 import { AuthServiceService } from './auth-service.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -8,22 +9,37 @@ import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres', 
-      host: 'localhost', 
-      port: 5432, 
-      username: 'postgres', 
-      password: '781640Tan', 
-      database: 'green_aqi_db',
-      entities: [], 
-      synchronize: true, 
-      autoLoadEntities: true,
+    ConfigModule.forRoot({
+      isGlobal: true,
     }),
+    
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule], // Cần import ConfigModule ở đây
+      inject: [ConfigService],  // Tiêm ConfigService
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT'), 
+        username: configService.get<string>('DB_USER'),
+        password: configService.get<string>('DB_PASS'),
+        database: configService.get<string>('DB_NAME'),
+        entities: [User, Role], 
+        synchronize: true,
+        autoLoadEntities: true,
+      }),
+    }),
+    
     TypeOrmModule.forFeature([User, Role]),
-    JwtModule.register({ 
-      global: true, // Làm cho JwtModule có sẵn toàn cục
-      secret: 'MY_SECRET_KEY', 
-      signOptions: { expiresIn: '60m' }, // Token hết hạn sau 60 phút
+
+    // 🚀 SỬA 2: DÙNG .registerAsync CHO JWT
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        global: true,
+        secret: configService.get<string>('JWT_SECRET'), // 👈 Lấy an toàn
+        signOptions: { expiresIn: '60m' },
+      }),
     }),
   ],
   controllers: [AuthServiceController],
