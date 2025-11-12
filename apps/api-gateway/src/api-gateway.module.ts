@@ -49,11 +49,12 @@ export class ApiGatewayModule implements NestModule {
     consumer
       .apply(
         createProxyMiddleware({
-          target: aqiUrl, 
+          target: this.configService.get<string>('AQI_SERVICE_URL'), // Cổng 3002
           changeOrigin: true,
+          proxyTimeout: 10000,
           on: { proxyReq: fixRequestBody },
         }),
       )
-      .forRoutes({ path: '/incidents/*path', method: RequestMethod.ALL });
+      .forRoutes({ path: '/aqi/*path', method: RequestMethod.ALL });
   }
 }
