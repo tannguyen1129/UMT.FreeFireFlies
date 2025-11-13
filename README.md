@@ -10,9 +10,9 @@
 
 Phát triển hệ thống ứng dụng công nghệ thông tin trong ứng phó và hỗ trợ khắc phục trong các tình huống khẩn cấp.
 
-Dự án được thực hiện nhằm mục đích tham gia bảng [Phần mềm Nguồn Mở](https://www.olp.vn/procon-pmmn/ph%E1%BA%A7n-m%E1%BB%81m-ngu%E1%BB%93n-m%E1%BB%9F) trong khuôn khổ [Kỳ thi Olympic Tin học sinh viên Việt Nam lần thứ 34](https://www.olp.vn/olympic-tin-h%E1%BB%8Dc-sinh-vi%C3%AAn) tổ chức tại [Trường Đại học Công nghệ Thành phố Hồ Chí Minh](https://www.haui.edu.vn/vn) từ ngày 10/12/2024 đến ngày 13/12/2024.
+Dự án được thực hiện nhằm mục đích tham gia bảng [Phần mềm Nguồn Mở](https://www.olp.vn/procon-pmmn/ph%E1%BA%A7n-m%E1%BB%81m-ngu%E1%BB%93n-m%E1%BB%9F) trong khuôn khổ [Kỳ thi Olympic Tin học sinh viên Việt Nam lần thứ 34](https://www.olp.vn/olympic-tin-h%E1%BB%8Dc-sinh-vi%C3%AAn) tổ chức tại [Trường Đại học Công nghệ Thành phố Hồ Chí Minh](https://www.hutech.edu.vn/) từ ngày 09/12/2025 đến ngày 12/12/2025.
 
-Phần mềm được đội ngũ tác giả của UMT.FreeFireFiles open source theo giấy phép [Apache 2.0 License](https://opensource.org/license/mit)
+Phần mềm được đội ngũ tác giả của UMT.FreeFireFiles open source theo giấy phép [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0)
 
 **Live Demo:** [DEMO](https://olp.umtoj.edu.vn/app/rescue-app/citizenpage-673f7d3ae443011fab9eaaab?branch=main)
 

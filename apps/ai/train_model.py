@@ -5,7 +5,8 @@ from sqlalchemy import create_engine, text
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
-import joblib # 👈 Dùng để lưu model
+import joblib
+import numpy as np
 
 def get_db_engine():
     """Tải .env và tạo SQLAlchemy engine."""
@@ -42,13 +43,11 @@ def feature_engineer(df):
     df_features = df.copy()
     
     # Tạo các đặc trưng "lag" (trễ)
-    # Mục tiêu: Dùng 4 mốc 15 phút (1 giờ) trước để dự đoán mốc hiện tại
     df_features['pm25_lag_15m'] = df_features['pm2_5'].shift(1)
     df_features['pm25_lag_30m'] = df_features['pm2_5'].shift(2)
     df_features['pm25_lag_45m'] = df_features['pm2_5'].shift(3)
     df_features['pm25_lag_60m'] = df_features['pm2_5'].shift(4)
     
-    # Xóa các dòng có giá trị NaN (các dòng đầu tiên không có lag)
     df_features.dropna(inplace=True)
     
     return df_features
@@ -59,29 +58,30 @@ def main():
         df = load_data(engine)
         
         if len(df) < 10:
-            print("❌ Lỗi: Dữ liệu quá ít để huấn luyện. (Cần ít nhất 10 dòng).")
+            print(f"❌ Lỗi: Dữ liệu quá ít để huấn luyện. (Cần ít nhất 10 dòng, đang có {len(df)}).")
             return
 
         df_features = feature_engineer(df)
         
-        # 1. Định nghĩa X (features) và y (target)
         features = ['pm25_lag_15m', 'pm25_lag_30m', 'pm25_lag_45m', 'pm25_lag_60m']
         target = 'pm2_5'
         
         X = df_features[features]
         y = df_features[target]
 
-        # 2. Chia dữ liệu
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
         
-        # 3. Huấn luyện mô hình (Dùng Linear Regression đơn giản)
         print("Đang huấn luyện mô hình Linear Regression...")
         model = LinearRegression()
         model.fit(X_train, y_train)
         
         # 4. Đánh giá mô hình
         preds = model.predict(X_test)
-        rmse = mean_squared_error(y_test, preds, squared=False)
+        
+        # 🚀 SỬA LỖI: TÍNH RMSE BẰNG TAY (THAY VÌ DÙNG 'squared=False')
+        mse = mean_squared_error(y_test, preds)
+        rmse = np.sqrt(mse) # Lấy căn bậc hai của MSE
+        
         print(f"✅ Huấn luyện thành công. Chỉ số lỗi (RMSE): {rmse:.2f} µg/m³")
         
         # 5. Lưu mô hình vào file

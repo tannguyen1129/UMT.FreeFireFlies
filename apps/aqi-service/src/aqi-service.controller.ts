@@ -17,7 +17,7 @@ import { RolesGuard } from './roles.guard';
 import { RoutePlannerService } from './route-planner.service';
 import { GetRecommendationDto } from './dto/get-recommendation.dto';
 
-@Controller('aqi') // 👈 ĐỔI TÊN CONTROLLER (hoặc tạo file mới)
+@Controller('aqi') 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class AqiServiceController {
   constructor(
@@ -26,7 +26,7 @@ export class AqiServiceController {
   ) {}
 
   // --- API BÁO CÁO SỰ CỐ (ĐÃ CÓ) ---
-  @Post('/incidents') // 👈 Cập nhật đường dẫn
+  @Post('/incidents') 
   @Roles('citizen')
   async createIncident(
     @Req() req: Request,
@@ -36,25 +36,55 @@ export class AqiServiceController {
     return this.aqiServiceService.createIncident(dto, userPayload.userId);
   }
 
-  @Get('/incidents') // 👈 Cập nhật đường dẫn
+  @Get('/incidents') 
   @Roles('admin', 'government_official')
   async findAllIncidents() {
     return this.aqiServiceService.findAllIncidents();
   }
 
-  // --- 🚀 API MỚI: TÌM ĐƯỜNG 🚀 ---
-  @Get('recommendations') // 👈 TẠO ENDPOINT: GET /aqi/recommendations
-  @UseGuards(AuthGuard('jwt')) // Chỉ cần đăng nhập là được
+  // 🚀 SỬA LỖI: Dùng '//' thay vì '/' cho chú thích
+  // --- 🚀 API TÌM ĐƯỜNG (ĐÃ SỬA LẠI LOGIC) 🚀 --- 
+  @Get('recommendations')
+  @UseGuards(AuthGuard('jwt')) 
   async getRecommendations(
-    // Dùng ValidationPipe để tự động kiểm tra và chuyển đổi (transform)
     @Query(new ValidationPipe({ transform: true })) dto: GetRecommendationDto,
   ) {
-    // 1. Gọi ORS để lấy tuyến đường
-    const routes = await this.routePlannerService.getRoutes(dto);
+    // 1. Lấy các tuyến đường (từ ORS)
+    const routesGeoJson = await this.routePlannerService.getRawRoutes(dto);
+    
+    // 2. Lấy dữ liệu dự báo AQI (từ Orion-LD)
+    const forecastData = await this.routePlannerService.getForecastData();
 
-    // 2. TODO: Phân tích AQI (làm ở bước sau)
+    // 3. Chấm điểm các tuyến đường
+    
+    let pm25Score = 1000; // Điểm mặc định (cao là xấu)
+    if (forecastData && forecastData.forecastedPM25) {
+      pm25Score = forecastData.forecastedPM25.value;
+    }
 
-    // 3. Trả về các tuyến đường GeoJSON
-    return routes;
+    // Gán điểm số vào từng tuyến đường
+    const scoredRoutes = routesGeoJson.features.map((route: any, index: number) => {
+      const durationInSeconds = route.properties.summary.duration;
+      
+      route.properties.exposureScore = pm25Score * durationInSeconds; 
+      
+      if (index === 0) {
+        route.properties.routeType = 'fastest';
+      } else {
+        route.properties.routeType = 'alternative';
+      }
+      return route;
+    });
+
+    // Sắp xếp lại, cho tuyến "sạch nhất" (điểm thấp nhất) lên đầu
+    routesGeoJson.features.sort((a, b) => a.properties.exposureScore - b.properties.exposureScore);
+
+    // Gán lại tuyến "sạch nhất"
+    if (routesGeoJson.features.length > 0) {
+       routesGeoJson.features[0].properties.routeType = 'cleanest';
+    }
+
+    // 4. Trả về GeoJSON đã chấm điểm
+    return routesGeoJson;
   }
 }
