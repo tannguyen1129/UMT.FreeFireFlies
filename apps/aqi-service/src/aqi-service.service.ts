@@ -59,7 +59,7 @@ export class AqiServiceService implements OnModuleInit {
     try {
       await this.handleGreenSpaceIngestion();
     } catch (err) {
-      this.logger.error('Initial Green Space ingestion failed', err?.response?.data || err?.message || err);
+      // Lỗi đã được log bên trong
     }
   }
 
@@ -74,6 +74,7 @@ export class AqiServiceService implements OnModuleInit {
         this.httpService.get(this.owmApiUrl, {
           headers: { 'Accept': 'application/json' },
           params: { lat: this.HCMC_LAT, lon: this.HCMC_LON, appid: this.OWM_API_KEY },
+          timeout: 10000, 
         }),
       );
       const list = response.data?.list || [];
@@ -90,14 +91,16 @@ export class AqiServiceService implements OnModuleInit {
       }
       this.logger.log(`✅ Successfully ingested and synced OWM data for HCMC.`);
     } catch (error) {
-      if (!error.response?.data?.title?.includes('Entity id is missing')) {
+      if (error.code === 'ECONNABORTED') {
+         this.logger.error('❌ Failed to ingest OWM data: Request timed out');
+      } else if (!error.response?.data?.title?.includes('Entity id is missing')) {
           this.logger.error('❌ Failed to ingest OWM data', error?.response?.data || error?.message || error);
       }
     }
   }
 
   // ================================================================
-  // 🌳 AGENT 2: THU THẬP KHÔNG GIAN XANH (Giữ nguyên)
+  // 🌳 AGENT 2: THU THẬP KHÔNG GIAN XANH (Đã Sửa Lỗi Timeout)
   // ================================================================
   @Cron(CronExpression.EVERY_DAY_AT_3AM) 
   async handleGreenSpaceIngestion() {
@@ -105,15 +108,12 @@ export class AqiServiceService implements OnModuleInit {
     
     const bbox = '10.35,106.24,11.18,107.02'; 
     
+    // 🚀 SỬA LỖI: ĐƠN GIẢN HÓA TRUY VẤN
+    // Chỉ lấy "công viên" (leisure=park)
     const overpassQuery = `
       [out:json][timeout:120];
       (
         way["leisure"="park"](${bbox});
-        way["landuse"="recreation_ground"](${bbox});
-        way["natural"="wood"](${bbox});
-        relation["leisure"="park"](${bbox});
-        relation["landuse"="recreation_ground"](${bbox});
-        relation["natural"="wood"](${bbox});
       );
       out geom;
     `;
@@ -122,12 +122,13 @@ export class AqiServiceService implements OnModuleInit {
       const response = await firstValueFrom(
         this.httpService.post(this.overpassApiUrl, overpassQuery, {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          timeout: 120000, // Vẫn giữ timeout 120 giây
         }),
       );
 
       const elements = response.data?.elements || [];
       if (elements.length === 0) {
-        this.logger.warn('⚠️ Overpass API returned no green spaces for HCMC.');
+        this.logger.warn('⚠️ Overpass API returned no parks (leisure=park) for HCMC.');
         return;
       }
 
@@ -141,14 +142,15 @@ export class AqiServiceService implements OnModuleInit {
         await this.greenSpaceRepository.save(entity);
         
         const ngsiLdPayload = this.formatGreenSpaceToNgsiLd(entity);
-        await this.syncToOrionLD(ngsiLdPayload); // 👈 Sẽ gọi hàm sync đã sửa lỗi
+        await this.syncToOrionLD(ngsiLdPayload);
         savedCount++;
       }
       this.logger.log(`✅ Successfully ingested and synced ${savedCount} green space(s).`);
 
     } catch (error) {
-      // Lỗi đã được log bên trong syncToOrionLD
-      if (!error.response?.data?.title?.includes('Invalid URI')) {
+      if (error.code === 'ECONNABORTED') {
+         this.logger.error('❌ Failed to ingest OpenStreetMap data: Request timed out (120s)');
+      } else {
          this.logger.error('❌ Failed to ingest OpenStreetMap data', error.response?.data || error.message);
       }
     }
@@ -159,7 +161,6 @@ export class AqiServiceService implements OnModuleInit {
   // ================================================================
 
   private formatOwmToAqiEntity(owmData: any): AirQualityObservation | null {
-    // ... (Giữ nguyên logic OWM)
     if (!owmData || !owmData.components || !owmData.dt) {
       this.logger.warn(`Invalid OWM data received, skipping.`);
       return null;
@@ -181,35 +182,33 @@ export class AqiServiceService implements OnModuleInit {
   }
   
   private formatOverpassToEntity(element: any): UrbanGreenSpace | null {
-    // ... (Giữ nguyên logic Overpass)
     const geom: Polygon = {
       type: 'Polygon',
       coordinates: [
         element.geometry.map((point: any) => [point.lon, point.lat])
       ],
     };
+
     const firstPoint = geom.coordinates[0][0];
     const lastPoint = geom.coordinates[0][geom.coordinates[0].length - 1];
     if (firstPoint[0] !== lastPoint[0] || firstPoint[1] !== lastPoint[1]) {
       geom.coordinates[0].push(firstPoint);
     }
+
     const entity = new UrbanGreenSpace();
     entity.entity_id = `osm-${element.type}-${element.id}`;
     entity.name = element.tags?.name;
     entity.category = element.tags?.leisure || element.tags?.landuse || element.tags?.natural;
     entity.geom = geom;
+
     return entity;
   }
 
-  /**
-   * 🚀 HELPER ĐÃ SỬA LỖI: Thêm tiền tố URN vào ID
-   */
   private formatGreenSpaceToNgsiLd(entity: UrbanGreenSpace): any {
-    // 🚀 SỬA LỖI: Thêm tiền tố URN chuẩn vào ID
     const entityId = `urn:ngsi-ld:UrbanGreenSpace:${entity.entity_id}`;
 
     return {
-      id: entityId, // 👈 FIX: Gửi ID đã có tiền tố
+      id: entityId, 
       type: 'UrbanGreenSpace',
       name: {
         type: 'Property',
@@ -230,7 +229,6 @@ export class AqiServiceService implements OnModuleInit {
   }
 
   private formatObservationToNgsiLd(obs: AirQualityObservation): any {
-    // ... (Giữ nguyên logic format OWM)
     const payload = {
       id: obs.entity_id,
       type: 'AirQualityObserved',
@@ -254,9 +252,6 @@ export class AqiServiceService implements OnModuleInit {
     return payload;
   }
 
-  // ================================================================
-  // 🔄 ĐỒNG BỘ DỮ LIỆU NGSI-LD (Giữ nguyên - Đã fix ở bước trước)
-  // ================================================================
   private async syncToOrionLD(payload: any) {
     try {
       await firstValueFrom(
@@ -293,20 +288,40 @@ export class AqiServiceService implements OnModuleInit {
   // ⚠️ INCIDENT (Giữ nguyên logic)
   // ================================================================
   async createIncident(dto: CreateIncidentDto, userId: string): Promise<Incident> {
-    // ... (Giữ nguyên)
+    this.logger.log(`--- (Tầng 2) BƯỚC 1: Nhận được request tạo Incident từ user: ${userId}`);
+    this.logger.log(`--- (Tầng 2) Payload DTO: ${JSON.stringify(dto)}`);
+    
     const newIncidentEntity = this.incidentRepository.create({
       ...dto,
       reported_by_user_id: userId,
       status: 'pending',
     });
-    const savedIncident = await this.incidentRepository.save(newIncidentEntity);
-    const ngsiLdPayload = this.formatIncidentToNgsiLd(savedIncident);
-    await this.syncToOrionLD(ngsiLdPayload); 
-    return savedIncident;
+
+    try {
+      this.logger.log('--- (Tầng 2) BƯỚC 2: Đang lưu vào PostgreSQL...');
+      const savedIncident = await this.incidentRepository.save(newIncidentEntity);
+      this.logger.log(`--- (Tầng 2) BƯỚC 2: Đã lưu vào DB (ID: ${savedIncident.incident_id})`);
+
+      const ngsiLdPayload = this.formatIncidentToNgsiLd(savedIncident);
+      
+      this.logger.log('--- (Tầng 2) BƯỚC 3: Đang đồng bộ lên Orion-LD...');
+      await this.syncToOrionLD(ngsiLdPayload); 
+      this.logger.log('--- (Tầng 2) BƯỚC 3: Đồng bộ Orion-LD thành công.');
+
+      return savedIncident;
+      
+    } catch (error) {
+      this.logger.error('--- (Tầng 2) LỖI NGHIÊM TRỌNG TRONG createIncident ---');
+      if (error.response?.data) { // Lỗi từ Orion
+        this.logger.error(error.response.data);
+      } else { // Lỗi CSDL hoặc lỗi khác
+        this.logger.error(error.message, error.stack);
+      }
+      throw error; // Ném lỗi ngược lại Gateway
+    }
   }
   
   async findAllIncidents(): Promise<Incident[]> {
-    // ... (Giữ nguyên)
     return this.incidentRepository.find({
       relations: ['reporter', 'incidentType'],
       order: { created_at: 'DESC' },
@@ -314,7 +329,6 @@ export class AqiServiceService implements OnModuleInit {
   }
 
   private formatIncidentToNgsiLd(incident: Incident): any {
-    // ... (Giữ nguyên)
     const entityId = `urn:ngsi-ld:Incident:${incident.incident_id}`;
     return {
       id: entityId,

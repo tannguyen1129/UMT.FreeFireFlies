@@ -16,6 +16,7 @@ import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard'; 
 import { RoutePlannerService } from './route-planner.service';
 import { GetRecommendationDto } from './dto/get-recommendation.dto';
+import { GetGreenSpacesDto } from './dto/get-green-spaces.dto';
 
 @Controller('aqi') 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -86,5 +87,14 @@ export class AqiServiceController {
 
     // 4. Trả về GeoJSON đã chấm điểm
     return routesGeoJson;
+  }
+
+  @Get('green-spaces') // 👈 TẠO ENDPOINT: GET /aqi/green-spaces
+  @UseGuards(AuthGuard('jwt')) // Chỉ cần đăng nhập
+  async findGreenSpaces(
+    @Query(new ValidationPipe({ transform: true })) dto: GetGreenSpacesDto,
+  ) {
+    // Gọi service để thực hiện GeoQuery
+    return this.routePlannerService.getNearbyGreenSpaces(dto);
   }
 }

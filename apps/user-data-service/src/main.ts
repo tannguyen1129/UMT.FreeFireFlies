@@ -3,6 +3,10 @@ import { UserDataServiceModule } from './user-data-service.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(UserDataServiceModule);
-  await app.listen(process.env.port ?? 3001);
+  app.enableCors({ origin: '*' });
+
+  // 🚀 SỬA: Thêm '0.0.0.0'
+  await app.listen(3001, '0.0.0.0'); 
+  console.log(`UserDataService is running on: ${await app.getUrl()}`);
 }
 bootstrap();
