@@ -7,6 +7,7 @@ import {
   Body,
   ValidationPipe,
   Query,
+  HttpCode,
 } from '@nestjs/common';
 import { AqiServiceService } from './aqi-service.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -18,13 +19,24 @@ import { RoutePlannerService } from './route-planner.service';
 import { GetRecommendationDto } from './dto/get-recommendation.dto';
 import { GetGreenSpacesDto } from './dto/get-green-spaces.dto';
 
+
 @Controller('aqi') 
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+// @UseGuards(AuthGuard('jwt'), RolesGuard) 
 export class AqiServiceController {
   constructor(
     private readonly aqiServiceService: AqiServiceService,
     private readonly routePlannerService: RoutePlannerService, 
   ) {}
+
+  // --- API WEBHOOK MỚI (CHO ORION-LD) ---
+  // Endpoint này phải CÔNG KHAI (public)
+  @Post('/notify-user')
+  @HttpCode(204) // Trả về 204 No Content (Rất quan trọng cho Webhook)
+  async handleOrionNotification(@Body() payload: any) {
+    // Không await, chạy trong nền
+    this.aqiServiceService.handleAqiAlertNotification(payload);
+    return; // Trả về 204 ngay lập tức
+  }
 
   // --- API BÁO CÁO SỰ CỐ (ĐÃ CÓ) ---
   @Post('/incidents') 
@@ -37,14 +49,27 @@ export class AqiServiceController {
     return this.aqiServiceService.createIncident(dto, userPayload.userId);
   }
 
+  // --- API MỚI: LẤY LOẠI SỰ CỐ ---
+  @Get('/incident-types') 
+  @UseGuards(AuthGuard('jwt')) // Chỉ cần đăng nhập
+  async findAllIncidentTypes() {
+    return this.aqiServiceService.findAllIncidentTypes();
+  }
+
+  // --- API MỚI: LẤY DỮ LIỆU DỰ BÁO ---
+  @Get('/forecasts') 
+  @UseGuards(AuthGuard('jwt')) // Chỉ cần đăng nhập
+  async findAllForecasts() {
+    return this.aqiServiceService.findAllForecasts();
+  }
+
   @Get('/incidents') 
   @Roles('admin', 'government_official')
   async findAllIncidents() {
     return this.aqiServiceService.findAllIncidents();
   }
 
-  // 🚀 SỬA LỖI: Dùng '//' thay vì '/' cho chú thích
-  // --- 🚀 API TÌM ĐƯỜNG (ĐÃ SỬA LẠI LOGIC) 🚀 --- 
+  // --- API TÌM ĐƯỜNG (ĐÃ SỬA LỖI LOGIC) --- 
   @Get('recommendations')
   @UseGuards(AuthGuard('jwt')) 
   async getRecommendations(
@@ -53,39 +78,49 @@ export class AqiServiceController {
     // 1. Lấy các tuyến đường (từ ORS)
     const routesGeoJson = await this.routePlannerService.getRawRoutes(dto);
     
-    // 2. Lấy dữ liệu dự báo AQI (từ Orion-LD)
-    const forecastData = await this.routePlannerService.getForecastData();
+    // 2. Lấy TẤT CẢ dữ liệu quan trắc (từ Orion-LD)
+    const observations = await this.routePlannerService.getObservationData();
 
-    // 3. Chấm điểm các tuyến đường
-    
-    let pm25Score = 1000; // Điểm mặc định (cao là xấu)
-    if (forecastData && forecastData.forecastedPM25) {
-      pm25Score = forecastData.forecastedPM25.value;
-    }
-
-    // Gán điểm số vào từng tuyến đường
-    const scoredRoutes = routesGeoJson.features.map((route: any, index: number) => {
-      const durationInSeconds = route.properties.summary.duration;
+    // 3. Chấm điểm các tuyến đường (Logic mới)
+    routesGeoJson.features.forEach((route: any, index: number) => {
+      let totalExposure = 0; 
       
-      route.properties.exposureScore = pm25Score * durationInSeconds; 
+      const segments = route.properties.segments;
+      const coordinates = route.geometry.coordinates; // [[lng, lat], ...]
+
+      segments.forEach((segment: any) => {
+        const duration = segment.duration; 
+        
+        const startPointIndex = segment.steps[0].way_points[0];
+        const coord = coordinates[startPointIndex]; // [lng, lat]
+        
+        // SỬA LỖI: Dùng object đơn giản, không dùng class 'LatLng'
+        const segmentMidPoint = { lat: coord[1], lng: coord[0] }; 
+
+        const pm25Score = this.routePlannerService.interpolateAqAtPoint(
+          segmentMidPoint,
+          observations,
+        );
+
+        totalExposure += (pm25Score * duration);
+      });
+
+      route.properties.exposureScore = totalExposure; 
       
       if (index === 0) {
         route.properties.routeType = 'fastest';
       } else {
         route.properties.routeType = 'alternative';
       }
-      return route;
     });
 
-    // Sắp xếp lại, cho tuyến "sạch nhất" (điểm thấp nhất) lên đầu
+    // Sắp xếp lại
     routesGeoJson.features.sort((a, b) => a.properties.exposureScore - b.properties.exposureScore);
 
-    // Gán lại tuyến "sạch nhất"
     if (routesGeoJson.features.length > 0) {
        routesGeoJson.features[0].properties.routeType = 'cleanest';
     }
 
-    // 4. Trả về GeoJSON đã chấm điểm
     return routesGeoJson;
   }
 

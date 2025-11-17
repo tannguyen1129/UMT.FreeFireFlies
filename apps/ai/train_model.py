@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 import joblib
-import numpy as np
+import numpy as np # 👈 Cần cho np.sqrt
 
 def get_db_engine():
     """Tải .env và tạo SQLAlchemy engine."""
@@ -28,11 +28,8 @@ def load_data(engine):
     if df.empty:
         raise ValueError("Không có dữ liệu trong 'air_quality_observations' để huấn luyện.")
         
-    # Xử lý dữ liệu thời gian
     df['time'] = pd.to_datetime(df['time'])
     df.set_index('time', inplace=True)
-    
-    # Chỉ lấy dữ liệu mỗi 15 phút để đảm bảo tính nhất quán
     df = df.resample('15min').mean().interpolate(method='linear')
     print(f"Đã tải và xử lý {len(df)} dòng dữ liệu.")
     return df
@@ -57,8 +54,8 @@ def main():
         engine = get_db_engine()
         df = load_data(engine)
         
-        if len(df) < 10:
-            print(f"❌ Lỗi: Dữ liệu quá ít để huấn luyện. (Cần ít nhất 10 dòng, đang có {len(df)}).")
+        if len(df) < 10: # Cần ít nhất 10 dòng
+            print(f"❌ Lỗi: Dữ liệu quá ít để huấn luyện (Cần ít nhất 10, đang có {len(df)}).")
             return
 
         df_features = feature_engineer(df)
@@ -75,16 +72,14 @@ def main():
         model = LinearRegression()
         model.fit(X_train, y_train)
         
-        # 4. Đánh giá mô hình
         preds = model.predict(X_test)
         
-        # 🚀 SỬA LỖI: TÍNH RMSE BẰNG TAY (THAY VÌ DÙNG 'squared=False')
+        # Tính RMSE (đã fix lỗi 'squared')
         mse = mean_squared_error(y_test, preds)
-        rmse = np.sqrt(mse) # Lấy căn bậc hai của MSE
+        rmse = np.sqrt(mse) 
         
         print(f"✅ Huấn luyện thành công. Chỉ số lỗi (RMSE): {rmse:.2f} µg/m³")
         
-        # 5. Lưu mô hình vào file
         model_filename = 'aqi_forecast_model.joblib'
         joblib.dump(model, model_filename)
         print(f"✅ Mô hình đã được lưu vào file: {model_filename}")

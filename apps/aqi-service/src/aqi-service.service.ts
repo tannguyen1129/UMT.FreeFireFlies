@@ -10,7 +10,10 @@ import { CreateIncidentDto } from './dto/create-incident.dto';
 import { AirQualityObservation } from './entities/air-quality-observation.entity';
 import { WeatherObservation } from './entities/weather-observation.entity';
 import { UrbanGreenSpace } from './entities/urban-green-space.entity';
+import { IncidentType } from './entities/incident-type.entity';
 import type { Polygon } from 'geojson'; 
+import { URLSearchParams } from 'url';
+import { RoutePlannerService } from './route-planner.service';
 
 @Injectable()
 export class AqiServiceService implements OnModuleInit {
@@ -18,15 +21,21 @@ export class AqiServiceService implements OnModuleInit {
   private readonly ORION_LD_URL: string;
   private readonly OWM_API_KEY: string; 
   private readonly owmApiUrl = 'http://api.openweathermap.org/data/2.5/air_pollution';
-  private readonly overpassApiUrl = 'https://overpass-api.de/api/interpreter';
+  private readonly overpassApiUrl = 'http://overpass-api.de/api/interpreter';
   
   private readonly HCMC_LAT = 10.7769;
   private readonly HCMC_LON = 106.7009;
   private readonly HCMC_VIRTUAL_STATION_ID = 'urn:ngsi-ld:AirQualityStation:HCMC-Central-OWM';
 
+  // 1. ĐỊNH NGHĨA CONTEXT HEADER CHUẨN (Giữ nguyên)
+  private readonly NGSI_LD_CONTEXT = '<https://smartdatamodels.org/context.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"';
+
   constructor(
+    // ... (Constructor giữ nguyên)
     @InjectRepository(Incident)
     private readonly incidentRepository: Repository<Incident>,
+    @InjectRepository(IncidentType)
+    private readonly incidentTypeRepository: Repository<IncidentType>,
     @InjectRepository(AirQualityObservation)
     private readonly observationRepository: Repository<AirQualityObservation>,
     @InjectRepository(WeatherObservation) 
@@ -47,27 +56,25 @@ export class AqiServiceService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    // ... (onModuleInit giữ nguyên)
     this.logger.log('AqiServiceModule initialized.');
     this.logger.log('Triggering initial OWM data ingestion...');
     try {
       await this.handleOwmDataIngestion();
-    } catch (err) {
-      // Đã bắt lỗi bên trong
-    }
+    } catch (err) { }
     
     this.logger.log('Triggering initial Green Space ingestion...');
     try {
       await this.handleGreenSpaceIngestion();
-    } catch (err) {
-      // Lỗi đã được log bên trong
-    }
+    } catch (err) { }
   }
 
   // ================================================================
   // 🔁 AGENT 1: THU THẬP DỮ LIỆU OWM (Giữ nguyên)
   // ================================================================
-  @Cron('*/15 * * * *')
+  @Cron('*/15 * * * *') 
   async handleOwmDataIngestion() {
+    // ... (Hàm này giữ nguyên)
     this.logger.log('Running Data Ingestion Agent for OpenWeatherMap (OWM)...');
     try {
       const response = await firstValueFrom(
@@ -100,7 +107,7 @@ export class AqiServiceService implements OnModuleInit {
   }
 
   // ================================================================
-  // 🌳 AGENT 2: THU THẬP KHÔNG GIAN XANH (Đã Sửa Lỗi Timeout)
+  // 🌳 AGENT 2: THU THẬP KHÔNG GIAN XANH (Sửa lỗi Timeout 504)
   // ================================================================
   @Cron(CronExpression.EVERY_DAY_AT_3AM) 
   async handleGreenSpaceIngestion() {
@@ -108,21 +115,24 @@ export class AqiServiceService implements OnModuleInit {
     
     const bbox = '10.35,106.24,11.18,107.02'; 
     
-    // 🚀 SỬA LỖI: ĐƠN GIẢN HÓA TRUY VẤN
-    // Chỉ lấy "công viên" (leisure=park)
+    // 🚀 SỬA 1: Tăng thời gian chờ của server lên 120 giây (2 phút)
     const overpassQuery = `
-      [out:json][timeout:120];
+      [out:json][timeout:120]; 
       (
         way["leisure"="park"](${bbox});
       );
       out geom;
     `;
-    
+
+    const params = new URLSearchParams();
+    params.append('data', overpassQuery.trim()); 
+
     try {
       const response = await firstValueFrom(
-        this.httpService.post(this.overpassApiUrl, overpassQuery, {
+        this.httpService.post(this.overpassApiUrl, params, { 
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          timeout: 120000, // Vẫn giữ timeout 120 giây
+          // 🚀 SỬA 2: Tăng thời gian chờ của client (axios) lên 120 giây
+          timeout: 120000,
         }),
       );
 
@@ -148,10 +158,13 @@ export class AqiServiceService implements OnModuleInit {
       this.logger.log(`✅ Successfully ingested and synced ${savedCount} green space(s).`);
 
     } catch (error) {
-      if (error.code === 'ECONNABORTED') {
-         this.logger.error('❌ Failed to ingest OpenStreetMap data: Request timed out (120s)');
+      // 🚀 SỬA 3: Bổ sung log cho lỗi 504
+      if (error.response?.status === 504) {
+         this.logger.error('❌ Failed to ingest OpenStreetMap data: Server timed out (504 Gateway Timeout). Query is too heavy or server is overloaded.');
+      } else if (error.code === 'ECONNABORTED') {
+         this.logger.error('❌ Failed to ingest OpenStreetMap data: Client timed out (120s)');
       } else {
-         this.logger.error('❌ Failed to ingest OpenStreetMap data', error.response?.data || error.message);
+         this.logger.error('❌ Failed to ingest OpenStreetMap data (Full Error):', error.stack);
       }
     }
   }
@@ -161,6 +174,7 @@ export class AqiServiceService implements OnModuleInit {
   // ================================================================
 
   private formatOwmToAqiEntity(owmData: any): AirQualityObservation | null {
+    // ... (Giữ nguyên)
     if (!owmData || !owmData.components || !owmData.dt) {
       this.logger.warn(`Invalid OWM data received, skipping.`);
       return null;
@@ -182,6 +196,7 @@ export class AqiServiceService implements OnModuleInit {
   }
   
   private formatOverpassToEntity(element: any): UrbanGreenSpace | null {
+    // ... (Giữ nguyên)
     const geom: Polygon = {
       type: 'Polygon',
       coordinates: [
@@ -205,6 +220,7 @@ export class AqiServiceService implements OnModuleInit {
   }
 
   private formatGreenSpaceToNgsiLd(entity: UrbanGreenSpace): any {
+    // ... (Giữ nguyên, không có @context)
     const entityId = `urn:ngsi-ld:UrbanGreenSpace:${entity.entity_id}`;
 
     return {
@@ -222,13 +238,11 @@ export class AqiServiceService implements OnModuleInit {
         type: 'GeoProperty',
         value: entity.geom,
       },
-      '@context': [
-        'https://smartdatamodels.org/context.jsonld',
-      ],
     };
   }
 
   private formatObservationToNgsiLd(obs: AirQualityObservation): any {
+    // ... (Giữ nguyên, không có @context)
     const payload = {
       id: obs.entity_id,
       type: 'AirQualityObserved',
@@ -240,7 +254,6 @@ export class AqiServiceService implements OnModuleInit {
       no2: { type: 'Property', value: obs.no2, unitCode: 'µg/m³' },
       so2: { type: 'Property', value: obs.so2, unitCode: 'µg/m³' },
       o3: { type: 'Property', value: obs.o3, unitCode: 'µg/m³' },
-      '@context': ['https://smartdatamodels.org/context.jsonld'],
     };
     Object.keys(payload).forEach(key => {
       if (key === 'id' || key === 'type' || key === '@context') return;
@@ -252,11 +265,18 @@ export class AqiServiceService implements OnModuleInit {
     return payload;
   }
 
+  // ================================================================
+  // 🔄 ĐỒNG BỘ DỮ LIỆU NGSI-LD (ĐÃ SỬA)
+  // ================================================================
   private async syncToOrionLD(payload: any) {
     try {
       await firstValueFrom(
         this.httpService.post(this.ORION_LD_URL, payload, {
-          headers: { 'Content-Type': 'application/ld+json' },
+          headers: { 
+            // 🚀 SỬA LỖI: ĐỔI 'application/ld+json' thành 'application/json'
+            'Content-Type': 'application/json',
+            'Link': this.NGSI_LD_CONTEXT // Giữ nguyên Link header
+          },
         }),
       );
     } catch (error) {
@@ -271,23 +291,93 @@ export class AqiServiceService implements OnModuleInit {
           
           await firstValueFrom(
             this.httpService.patch(entityUrl, patchPayload, {
-              headers: { 'Content-Type': 'application/ld+json' },
+              headers: { 
+                // 🚀 SỬA LỖI: ĐỔI 'application/ld+json' thành 'application/json'
+                'Content-Type': 'application/json',
+                'Link': this.NGSI_LD_CONTEXT // Giữ nguyên Link header
+              },
             }),
           );
         } catch (patchErr) {
           this.logger.error(`Failed to PATCH existing entity ${payload.id}`, patchErr?.response?.data || patchErr?.message || patchErr);
         }
       } else {
-        this.logger.error(`Failed to sync to Orion-LD (ID: ${payload.id})`, error?.response?.data || error?.message || error);
+         // Log lỗi chi tiết từ Orion (giống như lỗi 400 bạn vừa thấy)
+         this.logger.error(`Failed to sync to Orion-LD (ID: ${payload.id})`, error?.response?.data || error?.message);
         throw error; 
       }
     }
   }
 
+ // ================================================================
+  // 📈 FORECAST (DỰ BÁO)
   // ================================================================
-  // ⚠️ INCIDENT (Giữ nguyên logic)
+
+  /**
+   * Truy vấn Orion-LD để lấy tất cả các thực thể AirQualityForecast
+   * (Do Module AI tạo ra)
+   */
+  async findAllForecasts(): Promise<any> {
+    this.logger.log('--- (Tầng 2) Yêu cầu lấy danh sách Dự báo (Forecasts)...');
+    
+    const params = {
+      type: 'AirQualityForecast', // 👈 Lọc theo loại
+      limit: 100 // Lấy 100 dự báo mới nhất (an toàn)
+    };
+    
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(this.ORION_LD_URL, { // 👈 Gọi /entities
+          params: params,
+          headers: {
+            'Accept': 'application/ld+json',
+            'Link': '<https://smartdatamodels.org/context.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"'
+          },
+          timeout: 5000,
+        }),
+      );
+      
+      // Trả về một mảng các thực thể AirQualityForecast
+      return response.data; 
+
+    } catch (error) {
+      this.logger.error('Error fetching forecasts from Orion-LD', error.response?.data);
+      throw new Error('Failed to fetch forecasts from Orion-LD');
+    }
+  }
+
   // ================================================================
+  // 🚀 LOGIC MỚI: XỬ LÝ WEBHOOK TỪ ORION-LD
+  // ================================================================
+  async handleAqiAlertNotification(payload: any) {
+    this.logger.warn('--- (WEBHOOK) NHẬN ĐƯỢC CẢNH BÁO AQI TỪ ORION-LD ---');
+    
+    // Log toàn bộ payload (dạng thô)
+    this.logger.log(JSON.stringify(payload, null, 2));
+
+    // Lấy ID người dùng từ ID của Subscription
+    const subscriptionId = payload.subscriptionId as string;
+    const userId = subscriptionId.split(':')[3]; // Lấy phần 'userId' từ 'urn:ngsi-ld:Subscription:User:userId:AQIAlert'
+
+    // Lấy dữ liệu vi phạm
+    const data = payload.data[0];
+    const pm25 = data.forecastedPM25.value;
+    
+    this.logger.warn(`🔔 CẢNH BÁO CHO USER ${userId}: PM2.5 dự báo là ${pm25}! (Vượt ngưỡng)`);
+
+    // TODO (Bước tiếp theo):
+    // 1. Dùng userId để tìm FCM Token (token điện thoại) của người dùng (từ bảng user_devices).
+    // 2. Gửi Push Notification (Firebase) đến điện thoại của user đó.
+
+    return;
+  }
+
+  // ================================================================
+  // ⚠️ INCIDENT (ĐÃ SỬA)
+  // ================================================================
+  
   async createIncident(dto: CreateIncidentDto, userId: string): Promise<Incident> {
+    // ... (Hàm này giữ nguyên)
     this.logger.log(`--- (Tầng 2) BƯỚC 1: Nhận được request tạo Incident từ user: ${userId}`);
     this.logger.log(`--- (Tầng 2) Payload DTO: ${JSON.stringify(dto)}`);
     
@@ -304,31 +394,41 @@ export class AqiServiceService implements OnModuleInit {
 
       const ngsiLdPayload = this.formatIncidentToNgsiLd(savedIncident);
       
-      this.logger.log('--- (Tầng 2) BƯỚC 3: Đang đồng bộ lên Orion-LD...');
-      await this.syncToOrionLD(ngsiLdPayload); 
-      this.logger.log('--- (Tầng 2) BƯỚC 3: Đồng bộ Orion-LD thành công.');
+      this.logger.log('--- (Tầng 2) BƯỚC 3: Đang đồng bộ lên Orion-LD (Async)...');
+      
+      this.syncToOrionLD(ngsiLdPayload)
+        .then(() => {
+          this.logger.log(`--- (Tầng 2) BƯỚC 3: Đồng bộ Orion-LD (Async) THÀNH CÔNG (ID: ${savedIncident.incident_id})`);
+        })
+        .catch((err) => {
+          this.logger.error(`--- (Tầng 2) BƯỚC 3: Đồng bộ Orion-LD (Async) THẤT BẠI (ID: ${savedIncident.incident_id})`);
+        });
 
       return savedIncident;
       
     } catch (error) {
-      this.logger.error('--- (Tầng 2) LỖI NGHIÊM TRỌNG TRONG createIncident ---');
-      if (error.response?.data) { // Lỗi từ Orion
-        this.logger.error(error.response.data);
-      } else { // Lỗi CSDL hoặc lỗi khác
-        this.logger.error(error.message, error.stack);
-      }
-      throw error; // Ném lỗi ngược lại Gateway
+      this.logger.error('--- (Tầng 2) LỖI NGHIÊM TRỌNG TRONG createIncident (Lỗi CSDL) ---');
+      this.logger.error(error.message, error.stack);
+      throw error; 
     }
   }
   
   async findAllIncidents(): Promise<Incident[]> {
+    // ... (Giữ nguyên)
     return this.incidentRepository.find({
       relations: ['reporter', 'incidentType'],
       order: { created_at: 'DESC' },
     });
   }
 
+  async findAllIncidentTypes(): Promise<IncidentType[]> {
+    // ... (Giữ nguyên)
+    this.logger.log('--- (Tầng 2) Yêu cầu lấy danh sách Loại Sự cố...');
+    return this.incidentTypeRepository.find();
+  }
+
   private formatIncidentToNgsiLd(incident: Incident): any {
+    // ... (Giữ nguyên, không có @context)
     const entityId = `urn:ngsi-ld:Incident:${incident.incident_id}`;
     return {
       id: entityId,
@@ -339,7 +439,7 @@ export class AqiServiceService implements OnModuleInit {
       },
       incidentType: {
         type: 'Property',
-        value: `urn:ngsi-ld:IncidentType:${incident.incident_type_id}`,
+        value: `urn:ngsi-ld:IncidentType:${incident.incident_type_id}`, 
       },
       description: {
         type: 'Property',
@@ -360,7 +460,6 @@ export class AqiServiceService implements OnModuleInit {
         type: 'Relationship',
         object: `urn:ngsi-ld:User:${incident.reported_by_user_id}`,
       },
-      '@context': ['https://smartdatamodels.org/context.jsonld'],
     };
   }
 }

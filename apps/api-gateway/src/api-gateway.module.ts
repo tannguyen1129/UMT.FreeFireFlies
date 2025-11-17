@@ -6,15 +6,13 @@ import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
   imports: [
     ConfigModule.forRoot({ 
       isGlobal: true,
-      // Dùng file .env gốc
     }),
   ],
   controllers: [],
-  providers: [Logger], // 👈 Cung cấp Logger
+  providers: [Logger],
 })
 export class ApiGatewayModule implements NestModule {
   
-  // 🚀 Tiêm (Inject) ConfigService và Logger
   constructor(
     private readonly configService: ConfigService,
     private readonly logger: Logger 
@@ -22,56 +20,47 @@ export class ApiGatewayModule implements NestModule {
 
   configure(consumer: MiddlewareConsumer) {
     
-    // 🚀 GIẢI PHÁP DỨT ĐIỂM LỖI 504:
-    // Gateway (trong WSL) phải gọi IP TĨNH của WSL (172.27.144.1)
-    // thay vì 'localhost'
-    const wslHostIp = '172.27.144.1'; // 👈 IP WSL (từ ipconfig)
-    
-    // Đọc cổng từ .env (ví dụ: http://localhost:3003 -> 3003)
-    const authPort = this.configService.get<string>('AUTH_SERVICE_URL')?.split(':').pop() || '3003';
-    const userPort = this.configService.get<string>('USER_SERVICE_URL')?.split(':').pop() || '3001';
-    const aqiPort = this.configService.get<string>('AQI_SERVICE_URL')?.split(':').pop() || '3002';
+    const authTarget = this.configService.get<string>('AUTH_SERVICE_URL');
+    const userTarget = this.configService.get<string>('USER_SERVICE_URL');
+    const aqiTarget = this.configService.get<string>('AQI_SERVICE_URL');
 
-    // Xác định target bằng IP tĩnh
-    const authTarget = `http://${wslHostIp}:${authPort}`; // http://172.27.144.1:3003
-    const userTarget = `http://${wslHostIp}:${userPort}`; // http://172.27.144.1:3001
-    const aqiTarget = `http://${wslHostIp}:${aqiPort}`;  // http://172.27.144.1:3002
-
-    // ✅ Proxy cho /auth
+    // ✅ Proxy cho /auth (Giữ nguyên)
     consumer
       .apply(
         createProxyMiddleware({
-          target: authTarget, // 👈 SỬA: Dùng IP thật
+          target: authTarget,
           changeOrigin: true,
           on: { proxyReq: fixRequestBody },
-          proxyTimeout: 10000, // 10 giây
+          proxyTimeout: 10000, 
         }),
       )
-      .forRoutes({ path: '/auth/*path', method: RequestMethod.ALL }); // 👈 SỬA: Dùng /*path
+      .forRoutes({ path: '/auth/*path', method: RequestMethod.ALL });
 
-    // ✅ Proxy cho /users
+    // ✅ Proxy cho /users (Giữ nguyên)
     consumer
       .apply(
         createProxyMiddleware({
-          target: userTarget, // 👈 SỬA: Dùng IP thật
+          target: userTarget,
           changeOrigin: true,
           on: { proxyReq: fixRequestBody },
-          proxyTimeout: 10000, // 10 giây
+          proxyTimeout: 10000, 
         }),
       )
-      .forRoutes({ path: '/users/*path', method: RequestMethod.ALL }); // 👈 SỬA: Dùng /*path
+      .forRoutes({ path: '/users/*path', method: RequestMethod.ALL });
 
-    // ✅ Proxy cho /aqi
+    // ✅ Proxy cho /aqi (ĐÃ SỬA)
     consumer
       .apply(
         createProxyMiddleware({
-          target: aqiTarget, // 👈 SỬA: Dùng IP thật
+          target: aqiTarget, 
           changeOrigin: true,
-          proxyTimeout: 130000, // 130 giây (cho Overpass và ORS)
+          proxyTimeout: 130000,
           on: {
             proxyReq: (proxyReq, req, res) => {
-              // 🚀 SỬA: Dùng req.url
               this.logger.log(`[GW-PROXY] Đang proxy request: ${req.method} ${req.url} -> ${aqiTarget}${proxyReq.path}`);
+              
+              // 🚀 FIX: XÓA 'res' KHỎI HÀM NÀY
+              fixRequestBody(proxyReq, req);
             },
             proxyRes: (proxyRes, req, res) => {
               this.logger.log(`[GW-PROXY] Nhận phản hồi từ ${aqiTarget}: ${proxyRes.statusCode}`);
@@ -85,6 +74,6 @@ export class ApiGatewayModule implements NestModule {
           },
         }),
       )
-      .forRoutes({ path: '/aqi/*path', method: RequestMethod.ALL }); // 👈 SỬA: Dùng /*path
+      .forRoutes({ path: '/aqi/*path', method: RequestMethod.ALL });
   }
 }

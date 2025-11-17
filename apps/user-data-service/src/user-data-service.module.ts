@@ -8,6 +8,7 @@ import { Role } from './entities/role.entity';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
   imports: [
@@ -16,10 +17,12 @@ import { JwtStrategy } from './jwt.strategy';
       // Dùng file .env gốc
     }),
 
+    HttpModule,
+
   
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule], // Cần import ConfigModule
-      inject: [ConfigService],  // Tiêm ConfigService
+      imports: [ConfigModule], 
+      inject: [ConfigService],  
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         host: configService.get<string>('DB_HOST'),
@@ -35,15 +38,15 @@ import { JwtStrategy } from './jwt.strategy';
 
     TypeOrmModule.forFeature([User, Role]),
 
-    // Cấu hình Passport (Giữ nguyên)
+    
     PassportModule.register({ defaultStrategy: 'jwt' }),
 
-    // 🚀 SỬA 2: DÙNG .registerAsync CHO JWT
+    
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'), // 👈 Lấy an toàn
+        secret: configService.get<string>('JWT_SECRET'), 
         signOptions: { expiresIn: '60m' },
       }),
     }),
