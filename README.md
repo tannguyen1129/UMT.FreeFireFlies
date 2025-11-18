@@ -1,4 +1,4 @@
-# RESCUE SYSTEM - UMT.NEWMOUNTAIN 
+# Nền tảng Dự báo Chất lượng Không khí Siêu địa phương và Điều hướng Xanh tại TP.HCM - UMT.FreeFireFiles
 
 <a href="https://github.com/tannguyen1129/umtnewmountain/issues/new?assignees=&labels=bug&projects=&template=bug_report.md&title=%5BBug%5D%3A+%3CM%C3%B4+t%E1%BA%A3+ng%E1%BA%AFn+g%E1%BB%8Dn+v%E1%BB%81+l%E1%BB%97i%3E">Báo cáo lỗi (Bug Report)🆘🆘
 </a>
@@ -6,9 +6,17 @@
 <a href="https://github.com/tannguyen1129/umtnewmountain/issues/new?assignees=&labels=enhancement&projects=&template=feature.md&title=Y%C3%AAu+c%E1%BA%A7u+t%C3%ADnh+n%C4%83ng%3A+%5BT%C3%AAn+t%C3%ADnh+n%C4%83ng%5D">🧑‍🏫🧑‍🏫Feature Request (Yêu cầu thêm tính năng)
 </a>
 
-Ứng dụng hỗ trợ điều phối, thông báo, cập nhật thông tin ứng phó thiên tai, tham họa. Ở dự án này nhóm tác giả chọn Appsimth để dựng Frontend và Django để dựng APIs Backend
+## 1. Giới thiệu: Vấn đề (The "Why")
 
-Phát triển hệ thống ứng dụng công nghệ thông tin trong ứng phó và hỗ trợ khắc phục trong các tình huống khẩn cấp.
+Dự án này được xây dựng để giải quyết "khủng hoảng kép" về sức khỏe đô thị tại TP.HCM: **ô nhiễm không khí** nghiêm trọng (bụi mịn PM2.5) và sự **thiếu hụt không gian xanh**.
+
+Hiện tại, người dân thành phố thiếu các công cụ "siêu địa phương" (hyperlocal) để đưa ra các quyết định lành mạnh (ví dụ: "Tôi nên đi đường nào để hít ít khói bụi nhất?" hoặc "Công viên gần nhất ở đâu?"). Đồng thời, các cơ quan chức năng thiếu một nền tảng dữ liệu thống nhất (dựa trên chuẩn mở) để giám sát và hành động.
+
+## 2. Giải pháp: Kiến trúc NGSI-LD (The "How")
+
+Green-AQI Navigator là một hệ thống microservices đầy đủ, được xây dựng hoàn toàn trên các tiêu chuẩn **Dữ liệu Mở Liên kết (LOD)** và **Web Ngữ nghĩa**.
+
+Hệ thống sử dụng **FIWARE Orion-LD Context Broker** làm trung tâm thần kinh. Dữ liệu được thu thập, xử lý, và truy vấn dưới dạng các thực thể (Entities) JSON-LD đã được chuẩn hóa (sử dụng ontology của [SmartDataModels](https://smartdatamodels.org/)).
 
 Dự án được thực hiện nhằm mục đích tham gia bảng [Phần mềm Nguồn Mở](https://www.olp.vn/procon-pmmn/ph%E1%BA%A7n-m%E1%BB%81m-ngu%E1%BB%93n-m%E1%BB%9F) trong khuôn khổ [Kỳ thi Olympic Tin học sinh viên Việt Nam lần thứ 34](https://www.olp.vn/olympic-tin-h%E1%BB%8Dc-sinh-vi%C3%AAn) tổ chức tại [Trường Đại học Công nghệ Thành phố Hồ Chí Minh](https://www.hutech.edu.vn/) từ ngày 09/12/2025 đến ngày 12/12/2025.
 

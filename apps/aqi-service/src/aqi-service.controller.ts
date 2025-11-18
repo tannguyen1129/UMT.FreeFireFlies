@@ -2,12 +2,17 @@ import {
   Controller,
   Post,
   Get,
+  Patch, 
+  Put,    // 👈 Đã import
+  Delete, // 👈 Đã import
+  Param, 
   UseGuards,
   Req,
   Body,
   ValidationPipe,
   Query,
   HttpCode,
+  ParseIntPipe, // 👈 Đã import
 } from '@nestjs/common';
 import { AqiServiceService } from './aqi-service.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -18,28 +23,76 @@ import { RolesGuard } from './roles.guard';
 import { RoutePlannerService } from './route-planner.service';
 import { GetRecommendationDto } from './dto/get-recommendation.dto';
 import { GetGreenSpacesDto } from './dto/get-green-spaces.dto';
-
+import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto'; 
+import { ManageIncidentTypeDto } from './dto/manage-incident-type.dto'; // 👈 Đã import
 
 @Controller('aqi') 
-// @UseGuards(AuthGuard('jwt'), RolesGuard) 
+// ⚠️ Bỏ UseGuards ở cấp Controller (để Webhook hoạt động)
 export class AqiServiceController {
   constructor(
     private readonly aqiServiceService: AqiServiceService,
     private readonly routePlannerService: RoutePlannerService, 
   ) {}
 
-  // --- API WEBHOOK MỚI (CHO ORION-LD) ---
-  // Endpoint này phải CÔNG KHAI (public)
+  // --- API WEBHOOK (CHO ORION-LD) ---
   @Post('/notify-user')
-  @HttpCode(204) // Trả về 204 No Content (Rất quan trọng cho Webhook)
+  @HttpCode(204) 
   async handleOrionNotification(@Body() payload: any) {
-    // Không await, chạy trong nền
     this.aqiServiceService.handleAqiAlertNotification(payload);
-    return; // Trả về 204 ngay lập tức
+    return; 
   }
 
-  // --- API BÁO CÁO SỰ CỐ (ĐÃ CÓ) ---
+  // ==================================================
+  // API QUẢN LÝ LOẠI SỰ CỐ (ĐỀ XUẤT 2)
+  // ==================================================
+  
+  @Get('/incident-types')
+  @UseGuards(AuthGuard('jwt')) // Citizen cũng có thể xem
+  async findAllIncidentTypes() {
+    return this.aqiServiceService.findAllIncidentTypes();
+  }
+  
+  // 🚀 HÀM MỚI (CHO ADMIN)
+  @Post('/incident-types')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin') // Chỉ Admin
+  async createIncidentType(@Body(new ValidationPipe()) dto: ManageIncidentTypeDto) {
+    return this.aqiServiceService.createIncidentType(dto);
+  }
+
+  // 🚀 HÀM MỚI (CHO ADMIN)
+  @Put('/incident-types/:id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin') // Chỉ Admin
+  async updateIncidentType(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe()) dto: ManageIncidentTypeDto,
+  ) {
+    return this.aqiServiceService.updateIncidentType(id, dto);
+  }
+
+  // 🚀 HÀM MỚI (CHO ADMIN)
+  @Delete('/incident-types/:id')
+  @HttpCode(204)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin') // Chỉ Admin
+  async deleteIncidentType(@Param('id', ParseIntPipe) id: number) {
+    return this.aqiServiceService.deleteIncidentType(id);
+  }
+
+  // ==================================================
+  // API QUẢN LÝ SỰ CỐ (ĐÃ CÓ)
+  // ==================================================
+
+  @Get('/incidents/me') 
+  @UseGuards(AuthGuard('jwt')) 
+  async findMyIncidents(@Req() req: Request) {
+    const user = req.user as { userId: string };
+    return this.aqiServiceService.findMyIncidents(user.userId);
+  }
+
   @Post('/incidents') 
+  @UseGuards(AuthGuard('jwt'), RolesGuard) // 👈 Đã thêm Guard ở đây
   @Roles('citizen')
   async createIncident(
     @Req() req: Request,
@@ -48,25 +101,32 @@ export class AqiServiceController {
     const userPayload = req.user as { userId: string };
     return this.aqiServiceService.createIncident(dto, userPayload.userId);
   }
-
-  // --- API MỚI: LẤY LOẠI SỰ CỐ ---
-  @Get('/incident-types') 
-  @UseGuards(AuthGuard('jwt')) // Chỉ cần đăng nhập
-  async findAllIncidentTypes() {
-    return this.aqiServiceService.findAllIncidentTypes();
+  
+  @Patch('/incidents/:id/status') 
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin', 'government_official')
+  async updateIncidentStatus(
+    @Param('id') id: string,
+    @Body(new ValidationPipe()) dto: UpdateIncidentStatusDto,
+  ) {
+    return this.aqiServiceService.updateIncidentStatus(id, dto);
   }
-
-  // --- API MỚI: LẤY DỮ LIỆU DỰ BÁO ---
-  @Get('/forecasts') 
-  @UseGuards(AuthGuard('jwt')) // Chỉ cần đăng nhập
-  async findAllForecasts() {
-    return this.aqiServiceService.findAllForecasts();
-  }
-
+  
   @Get('/incidents') 
+  @UseGuards(AuthGuard('jwt'), RolesGuard) 
   @Roles('admin', 'government_official')
   async findAllIncidents() {
     return this.aqiServiceService.findAllIncidents();
+  }
+
+  // ==================================================
+  // API TÍNH NĂNG (ĐÃ CÓ)
+  // ==================================================
+
+  @Get('/forecasts') 
+  @UseGuards(AuthGuard('jwt'))
+  async findAllForecasts() {
+    return this.aqiServiceService.findAllForecasts();
   }
 
   // --- API TÌM ĐƯỜNG (ĐÃ SỬA LỖI LOGIC) --- 
