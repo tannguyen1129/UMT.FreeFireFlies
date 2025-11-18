@@ -193,4 +193,37 @@ export class RoutePlannerService {
       throw new Error('Failed to fetch green spaces from Orion-LD');
     }
   }
+
+  // --- TÌM KHU VỰC NHẠY CẢM (TRƯỜNG HỌC, BỆNH VIỆN...) ---
+  async getNearbySensitiveAreas(dto: GetGreenSpacesDto): Promise<any> {
+    const radius = dto.radius || 2000; // Mặc định 2km
+    
+    const params = {
+      type: 'SensitiveArea', // 👈 CHỈ ĐỔI TYPE
+      georel: 'near;maxDistance==' + radius,
+      geometry: 'Point',
+      coordinates: `[${dto.lng}, ${dto.lat}]`,
+      limit: 20 // Lấy tối đa 20 địa điểm
+    };
+
+    this.logger.log(`[GeoQuery] Finding Sensitive Areas near ${dto.lat},${dto.lng} within ${radius}m`);
+    
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(this.orionLdUrl, {
+          params: params, 
+          headers: {
+            'Accept': 'application/ld+json',
+            'Link': '<https://smartdatamodels.org/context.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"'
+          },
+          timeout: 10000, 
+        }),
+      );
+      return response.data; 
+    } catch (error) {
+      this.logger.error('Error performing GeoQuery for Sensitive Areas', error.response?.data);
+      throw new Error('Failed to fetch sensitive areas from Orion-LD');
+    }
+  }
+
 }

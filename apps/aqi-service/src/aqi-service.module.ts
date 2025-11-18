@@ -17,6 +17,8 @@ import { RoutePlannerService } from './route-planner.service';
 import { AirQualityObservation } from './entities/air-quality-observation.entity'; 
 import { WeatherObservation } from './entities/weather-observation.entity';
 import { UrbanGreenSpace } from './entities/urban-green-space.entity';
+import { SensitiveArea } from './entities/sensitive-area.entity';
+import { RoadFeature } from './entities/road-feature.entity';
 
 @Module({
   imports: [
@@ -38,14 +40,14 @@ import { UrbanGreenSpace } from './entities/urban-green-space.entity';
         username: configService.get<string>('DB_USER'),
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
-        entities: [User, Role, IncidentType, Incident, AirQualityObservation, WeatherObservation, UrbanGreenSpace], 
+        entities: [User, Role, IncidentType, Incident, AirQualityObservation, WeatherObservation, UrbanGreenSpace, SensitiveArea, RoadFeature], 
         synchronize: true,
         autoLoadEntities: true,
       }),
     }),
 
     // Đăng ký Entities cho Module (Giữ nguyên)
-    TypeOrmModule.forFeature([IncidentType, Incident, AirQualityObservation, WeatherObservation, UrbanGreenSpace]),
+    TypeOrmModule.forFeature([IncidentType, Incident, AirQualityObservation, WeatherObservation, UrbanGreenSpace, SensitiveArea, RoadFeature]),
 
     // Cấu hình Passport (Giữ nguyên)
     PassportModule.register({ defaultStrategy: 'jwt' }),

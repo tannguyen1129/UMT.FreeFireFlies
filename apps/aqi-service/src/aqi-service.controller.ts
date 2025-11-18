@@ -42,6 +42,17 @@ export class AqiServiceController {
     return; 
   }
 
+  // --- 🚀 API MỚI: TÌM KHU VỰC NHẠY CẢM ---
+  @Get('sensitive-areas')
+  @UseGuards(AuthGuard('jwt')) 
+  async findSensitiveAreas(
+    @Query(new ValidationPipe({ transform: true })) dto: GetGreenSpacesDto, 
+    // (Tái sử dụng DTO GetGreenSpacesDto vì cũng cần lat, lng, radius)
+  ) {
+    // Gọi hàm service (bạn cần thêm hàm này vào route-planner.service.ts tương tự getNearbyGreenSpaces)
+    return this.routePlannerService.getNearbySensitiveAreas(dto);
+  }
+
   // ==================================================
   // API QUẢN LÝ LOẠI SỰ CỐ (ĐỀ XUẤT 2)
   // ==================================================

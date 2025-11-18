@@ -11,9 +11,25 @@ import { AirQualityObservation } from './entities/air-quality-observation.entity
 import { WeatherObservation } from './entities/weather-observation.entity';
 import { UrbanGreenSpace } from './entities/urban-green-space.entity';
 import { IncidentType } from './entities/incident-type.entity'; 
+import { SensitiveArea } from './entities/sensitive-area.entity';
+import { RoadFeature } from './entities/road-feature.entity';
 import { ManageIncidentTypeDto } from './dto/manage-incident-type.dto';
 import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
 import type { Polygon } from 'geojson'; 
+
+const HCMC_GRID = [
+  { id: 'ThuDuc', lat: 10.8231, lon: 106.7711 }, // Q.Thủ Đức (cũ)
+  { id: 'District12', lat: 10.8672, lon: 106.6415 }, // Q.12
+  { id: 'HocMon', lat: 10.8763, lon: 106.5941 }, // H.Hóc Môn
+  { id: 'District1', lat: 10.7769, lon: 106.7009 }, // Q.1 (Trung tâm)
+  { id: 'BinhTan', lat: 10.7656, lon: 106.6031 }, // Q.Bình Tân
+  { id: 'District2', lat: 10.7877, lon: 106.7407 }, // Q.2 (cũ)
+  { id: 'District7', lat: 10.734, lon: 106.7206 }, // Q.7
+  { id: 'BinhChanh', lat: 10.718, lon: 106.6067 }, // H.Bình Chánh
+  { id: 'CanGio', lat: 10.518, lon: 106.8776 }, // H.Cần Giờ
+];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 @Injectable()
 export class AqiServiceService implements OnModuleInit {
@@ -22,10 +38,8 @@ export class AqiServiceService implements OnModuleInit {
   private readonly OWM_API_KEY: string; 
   private readonly owmApiUrl = 'http://api.openweathermap.org/data/2.5/air_pollution';
   private readonly overpassApiUrl = 'https://overpass-api.de/api/interpreter';
+  private readonly owmWeatherApiUrl = 'http://api.openweathermap.org/data/2.5/weather';
   
-  private readonly HCMC_LAT = 10.7769;
-  private readonly HCMC_LON = 106.7009;
-  private readonly HCMC_VIRTUAL_STATION_ID = 'urn:ngsi-ld:AirQualityStation:HCMC-Central-OWM';
   
   // 🚀 ĐỊNH NGHĨA CONTEXT CHUẨN
   private readonly NGSI_LD_CONTEXT = [
@@ -34,10 +48,9 @@ export class AqiServiceService implements OnModuleInit {
   ];
 
   constructor(
-    // Đảm bảo tất cả 4 Repositories đã được Inject
     @InjectRepository(Incident)
     private readonly incidentRepository: Repository<Incident>,
-    @InjectRepository(IncidentType) // 👈 Bổ sung Repo
+    @InjectRepository(IncidentType) 
     private readonly incidentTypeRepository: Repository<IncidentType>,
     @InjectRepository(AirQualityObservation)
     private readonly observationRepository: Repository<AirQualityObservation>,
@@ -45,6 +58,10 @@ export class AqiServiceService implements OnModuleInit {
     private readonly weatherRepository: Repository<WeatherObservation>,
     @InjectRepository(UrbanGreenSpace)
     private readonly greenSpaceRepository: Repository<UrbanGreenSpace>,
+    @InjectRepository(SensitiveArea)
+    private readonly sensitiveAreaRepository: Repository<SensitiveArea>,
+    @InjectRepository(RoadFeature) 
+    private readonly roadFeatureRepository: Repository<RoadFeature>,
 
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -60,15 +77,36 @@ export class AqiServiceService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('AqiServiceModule initialized.');
-    this.logger.log('Triggering initial OWM data ingestion...');
+
+    // 1. Agent OWM & Weather
+    this.logger.log('Triggering initial OWM & Weather data ingestion...');
     try {
       await this.handleOwmDataIngestion();
+      await this.handleWeatherDataIngestion();
     } catch (err) { }
     
+    // 2. Agent Green Space
     this.logger.log('Triggering initial Green Space ingestion...');
     try {
       await this.handleGreenSpaceIngestion();
     } catch (err) { }
+
+    // 3. 🚀 KÍCH HOẠT NGAY AGENT SENSITIVE AREA (ĐỂ TEST)
+    this.logger.log('Triggering initial Sensitive Area ingestion (School, Hospital...)...');
+    try {
+      // Gọi hàm này ngay lập tức thay vì đợi đến 4h sáng
+      await this.handleSensitiveAreaIngestion(); 
+    } catch (err) {
+      this.logger.error('Initial Sensitive Area ingestion failed', err.message);
+    }
+
+    this.logger.log('Triggering initial Road Feature ingestion...');
+    try {
+        // Gọi hàm này nhưng KHÔNG await để nó chạy nền, không chặn app khởi động
+        // Tuy nhiên, để test lần đầu, bạn có thể await nếu muốn xem log ngay
+        this.handleRoadFeatureIngestion(); 
+    } catch (err) { }
+
   }
 
   // ================================================================
@@ -76,39 +114,60 @@ export class AqiServiceService implements OnModuleInit {
   // ================================================================
   @Cron('*/15 * * * *')  
   async handleOwmDataIngestion() {
-    this.logger.log('Running Data Ingestion Agent for OpenWeatherMap (OWM)...');
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(this.owmApiUrl, {
-          headers: { 'Accept': 'application/json' },
-          params: { lat: this.HCMC_LAT, lon: this.HCMC_LON, appid: this.OWM_API_KEY },
-          timeout: 10000, 
-        }),
-      );
-      const list = response.data?.list || [];
-      if (list.length === 0) {
-        this.logger.warn('⚠️ OWM returned no air pollution data for HCMC.');
-        return;
+    this.logger.log(`Running Data Ingestion Agent for OWM (Grid: ${HCMC_GRID.length} points)...`);
+    
+    let savedCount = 0;
+
+    // 🚀 BƯỚC 2: LẶP QUA TỪNG ĐIỂM TRONG LƯỚI
+    for (const gridPoint of HCMC_GRID) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get(this.owmApiUrl, {
+            headers: { 'Accept': 'application/json' },
+            params: { 
+              lat: gridPoint.lat, // 👈 Dùng tọa độ của Lưới
+              lon: gridPoint.lon, 
+              appid: this.OWM_API_KEY 
+            },
+            timeout: 10000, 
+          }),
+        );
+
+        const list = response.data?.list || [];
+        if (list.length === 0) {
+          this.logger.warn(`⚠️ OWM returned no data for grid point: ${gridPoint.id}`);
+          continue; // Bỏ qua điểm này, tiếp tục điểm khác
+        }
+        
+        const owmData = list[0]; 
+        
+        // 🚀 BƯỚC 3: TRUYỀN ID VÀ TỌA ĐỘ VÀO HÀM FORMAT
+        const entityId = `urn:ngsi-ld:AirQualityStation:OWM-${gridPoint.id}`;
+        const location = { lat: gridPoint.lat, lon: gridPoint.lon };
+        
+        const observationEntity = this.formatOwmToAqiEntity(owmData, entityId, location);
+        
+        if (observationEntity) {
+          await this.observationRepository.save(observationEntity);
+          const ngsiLdPayload = this.formatObservationToNgsiLd(observationEntity);
+          await this.syncToOrionLD(ngsiLdPayload); 
+          savedCount++;
+        }
+        
+      } catch (error) {
+        if (error.code === 'ECONNABORTED') {
+           this.logger.error(`❌ Failed to ingest OWM data for ${gridPoint.id}: Request timed out`);
+        } else {
+            this.logger.error(`❌ Failed to ingest OWM data for ${gridPoint.id}`, error?.response?.data || error?.message || error);
+        }
       }
-      const owmData = list[0]; 
-      const observationEntity = this.formatOwmToAqiEntity(owmData);
-      if (observationEntity) {
-        await this.observationRepository.save(observationEntity);
-        const ngsiLdPayload = this.formatObservationToNgsiLd(observationEntity);
-        await this.syncToOrionLD(ngsiLdPayload); 
-      }
-      this.logger.log(`✅ Successfully ingested and synced OWM data for HCMC.`);
-    } catch (error) {
-      if (error.code === 'ECONNABORTED') {
-         this.logger.error('❌ Failed to ingest OWM data: Request timed out');
-      } else {
-          this.logger.error('❌ Failed to ingest OWM data', error?.response?.data || error?.message || error);
-      }
-    }
+    } // Hết vòng lặp
+
+    this.logger.log(`✅ Successfully ingested and synced ${savedCount} OWM grid point(s).`);
   }
 
   // ================================================================
-  // 🌳 AGENT 2: THU THẬP KHÔNG GIAN XANH (Đã ổn định)
+  // AGENT 2: THU THẬP KHÔNG GIAN XANH 
   // ================================================================
   @Cron(CronExpression.EVERY_DAY_AT_3AM) 
   async handleGreenSpaceIngestion() {
@@ -162,21 +221,221 @@ export class AqiServiceService implements OnModuleInit {
   }
 
   // ================================================================
+  // AGENT 3: THU THẬP DỮ LIỆU THỜI TIẾT (MỚI)
+  // ================================================================
+  @Cron('*/15 * * * *')
+  async handleWeatherDataIngestion() {
+    this.logger.log(`Running Data Ingestion Agent for OWM (Weather Grid: ${HCMC_GRID.length} points)...`);
+    
+    let savedCount = 0;
+    for (const gridPoint of HCMC_GRID) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get(this.owmWeatherApiUrl, { 
+            headers: { 'Accept': 'application/json' },
+            params: { 
+              lat: gridPoint.lat,
+              lon: gridPoint.lon, 
+              appid: this.OWM_API_KEY,
+              units: 'metric' 
+            },
+            timeout: 10000, 
+          }),
+        );
+
+        const weatherData = response.data;
+        if (!weatherData || !weatherData.main) {
+          this.logger.warn(`⚠️ OWM returned no weather data for grid point: ${gridPoint.id}`);
+          continue;
+        }
+        
+        const entityId = `urn:ngsi-ld:WeatherObservation:OWM-${gridPoint.id}`;
+        const location = { lat: gridPoint.lat, lon: gridPoint.lon };
+
+        const observationEntity = this.formatOwmToWeatherEntity(weatherData, entityId, location);
+        
+        if (observationEntity) {
+          await this.weatherRepository.save(observationEntity);
+          const ngsiLdPayload = this.formatWeatherToNgsiLd(observationEntity);
+          await this.syncToOrionLD(ngsiLdPayload); 
+          savedCount++;
+        }
+        
+      } catch (error) {
+        if (error.code === 'ECONNABORTED') {
+           this.logger.error(`❌ Failed to ingest Weather data for ${gridPoint.id}: Request timed out`);
+        } else {
+            this.logger.error(`❌ Failed to ingest Weather data for ${gridPoint.id}`, error?.response?.data || error?.message || error);
+        }
+      }
+    }
+    this.logger.log(`✅ Successfully ingested and synced ${savedCount} OWM Weather grid point(s).`);
+  }
+
+  // ================================================================
+  // AGENT 4: THU THẬP KHU VỰC NHẠY CẢM (MỞ RỘNG)
+  // ================================================================
+  @Cron(CronExpression.EVERY_DAY_AT_4AM) 
+  async handleSensitiveAreaIngestion() {
+    this.logger.log('Running Agent for Sensitive Areas (School, Hospital, Police, Military)...');
+    
+    const bbox = '10.35,106.24,11.18,107.02'; 
+    
+    const overpassQuery = `
+      [out:json][timeout:180];
+      (
+        way["amenity"="school"](${bbox});
+        way["amenity"="hospital"](${bbox});
+        way["amenity"="police"](${bbox});
+        way["landuse"="military"](${bbox});
+      );
+      out geom;
+    `;
+    
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(this.overpassApiUrl, overpassQuery, {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          timeout: 180000, // 3 phút
+        }),
+      );
+
+      const elements = response.data?.elements || [];
+      if (elements.length === 0) {
+        this.logger.warn('⚠️ No sensitive areas found.');
+        return;
+      }
+
+      let savedCount = 0;
+      for (const element of elements) {
+        if (element.type !== 'way' || !element.geometry) continue; 
+        
+        const entity = this.formatOverpassToSensitiveArea(element);
+        if (!entity) continue;
+
+        await this.sensitiveAreaRepository.save(entity);
+        
+        const ngsiLdPayload = this.formatSensitiveAreaToNgsiLd(entity);
+        await this.syncToOrionLD(ngsiLdPayload);
+        savedCount++;
+      }
+      this.logger.log(`✅ Successfully ingested and synced ${savedCount} sensitive area(s).`);
+
+    } catch (error) {
+       if (error.code === 'ECONNABORTED') {
+         this.logger.error('❌ Sensitive Area Ingestion timed out (180s)');
+      } else {
+         // 🚀 LOG CHI TIẾT LỖI RA
+         this.logger.error('❌ Failed to ingest Sensitive Areas', error.stack);
+      }
+    }
+  }
+
+  // ================================================================
+  // AGENT 5: THU THẬP ĐẶC TRƯNG ĐƯỜNG BỘ (ROAD FEATURE - MỚI)
+  // ================================================================
+  @Cron(CronExpression.EVERY_WEEK)
+  async handleRoadFeatureIngestion() {
+    this.logger.log(`Running Agent for Road Features (Major Road Count)...`);
+    
+    let savedCount = 0;
+    
+    for (const gridPoint of HCMC_GRID) {
+        const stationId = `urn:ngsi-ld:AirQualityStation:OWM-${gridPoint.id}`;
+        
+        // Tăng timeout trong query lên 90s
+        const overpassQuery = `
+            [out:json][timeout:90]; 
+            (
+              way(around:500, ${gridPoint.lat}, ${gridPoint.lon})["highway"="primary"];
+              way(around:500, ${gridPoint.lat}, ${gridPoint.lon})["highway"="secondary"];
+            );
+            out count;
+        `;
+
+        try {
+            const response = await firstValueFrom(
+                this.httpService.post(this.overpassApiUrl, overpassQuery, {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    timeout: 100000, // 100s
+                }),
+            );
+            
+            const countElement = response.data?.elements?.[0];
+            const count = countElement?.tags?.total || 0; 
+
+            await this.roadFeatureRepository.upsert(
+                {
+                    entity_id: stationId,
+                    majorRoadCount: parseInt(count, 10),
+                },
+                ['entity_id'] 
+            );
+            savedCount++;
+
+            this.logger.log(`[RoadFeature] ${gridPoint.id}: ${count} major roads.`);
+
+        } catch (error) {
+            this.logger.error(`❌ Failed to ingest Road Features for ${gridPoint.id}`, error.message);
+        }
+
+        // HỜ 5 GIÂY TRƯỚC KHI GỌI TIẾP (TRÁNH RATE LIMIT)
+        await sleep(5000);
+    }
+    
+    this.logger.log(`✅ Successfully ingested and synced ${savedCount} Road Features.`);
+  }
+
+  // ================================================================
   // 🧩 CÁC HÀM HELPER
   // ================================================================
+
+  // 🚀 HELPER MỚI: Format Sensitive Area (Cập nhật logic phân loại)
+  private formatOverpassToSensitiveArea(element: any): SensitiveArea | null {
+    const geom: Polygon = {
+      type: 'Polygon',
+      coordinates: [ element.geometry.map((point: any) => [point.lon, point.lat]) ],
+    };
+    // Đóng polygon
+    const first = geom.coordinates[0][0];
+    const last = geom.coordinates[0][geom.coordinates[0].length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) geom.coordinates[0].push(first);
+
+    const entity = new SensitiveArea();
+    entity.entity_id = `osm-${element.type}-${element.id}`;
+    entity.name = element.tags?.name || 'Không rõ tên';
+    
+    // Xác định loại (Category)
+    if (element.tags?.amenity === 'school') entity.category = 'school';
+    else if (element.tags?.amenity === 'hospital') entity.category = 'hospital';
+    else if (element.tags?.amenity === 'police') entity.category = 'police';
+    else if (element.tags?.landuse === 'military') entity.category = 'military';
+    else entity.category = 'other';
+
+    entity.geom = geom;
+    return entity;
+  }
   
-  private formatOwmToAqiEntity(owmData: any): AirQualityObservation | null {
+  private formatOwmToAqiEntity(
+    owmData: any, 
+    entityId: string, 
+    location: { lat: number, lon: number }
+  ): AirQualityObservation | null {
+    
     if (!owmData || !owmData.components || !owmData.dt) {
-      this.logger.warn(`Invalid OWM data received, skipping.`);
+      this.logger.warn(`Invalid OWM data received for ${entityId}, skipping.`);
       return null;
     }
     const obs = new AirQualityObservation();
-    obs.entity_id = this.HCMC_VIRTUAL_STATION_ID;
+    
+    obs.entity_id = entityId; // 👈 Dùng ID động
     obs.time = new Date(owmData.dt * 1000); 
     obs.location = {
       type: 'Point',
-      coordinates: [this.HCMC_LON, this.HCMC_LAT],
+      coordinates: [location.lon, location.lat], // 👈 Dùng tọa độ động
     };
+
+    // Map các thành phần
     obs.pm2_5 = owmData.components.pm2_5;
     obs.pm10 = owmData.components.pm10;
     obs.no2 = owmData.components.no2;
@@ -207,6 +466,54 @@ export class AqiServiceService implements OnModuleInit {
     entity.geom = geom;
 
     return entity;
+  }
+
+  private formatOwmToWeatherEntity(
+    weatherData: any, 
+    entityId: string, 
+    location: { lat: number, lon: number }
+  ): WeatherObservation | null {
+    const obs = new WeatherObservation();
+    obs.entity_id = entityId; 
+    obs.time = new Date(weatherData.dt * 1000); 
+    obs.location = { type: 'Point', coordinates: [location.lon, location.lat] };
+    
+    // 🚀 SỬA: Dùng đúng tên thuộc tính camelCase
+    obs.temperature = weatherData.main?.temp;
+    obs.relativeHumidity = weatherData.main?.humidity; // camelCase
+    obs.windSpeed = weatherData.wind?.speed;           // camelCase
+    obs.windDirection = weatherData.wind?.deg;         // camelCase
+    
+    return obs;
+  }
+
+  // 🚀 HELPER MỚI: Format sang NGSI-LD
+  private formatSensitiveAreaToNgsiLd(entity: SensitiveArea): any {
+    return {
+      id: `urn:ngsi-ld:SensitiveArea:${entity.entity_id}`, 
+      type: 'SensitiveArea', 
+      name: { type: 'Property', value: entity.name },
+      category: { type: 'Property', value: entity.category },
+      location: { type: 'GeoProperty', value: entity.geom },
+      '@context': this.NGSI_LD_CONTEXT,
+    };
+  }
+
+  // HELPER MỚI: Format Dữ liệu Thời tiết (sang NGSI-LD)
+  private formatWeatherToNgsiLd(obs: WeatherObservation): any {
+    const payload = {
+      id: obs.entity_id,
+      type: 'WeatherObserved', 
+      location: { type: 'GeoProperty', value: obs.location },
+      dateObserved: { type: 'Property', value: { '@type': 'DateTime', '@value': obs.time.toISOString() } },
+      temperature: { type: 'Property', value: obs.temperature, unitCode: 'CEL' }, 
+      // 🚀 SỬA: Dùng đúng tên thuộc tính camelCase
+      relativeHumidity: { type: 'Property', value: (obs.relativeHumidity || 0) / 100 }, 
+      windSpeed: { type: 'Property', value: obs.windSpeed, unitCode: 'MTS' }, 
+      windDirection: { type: 'Property', value: obs.windDirection }, 
+      '@context': this.NGSI_LD_CONTEXT,
+    };
+    return payload;
   }
 
   // 🚀 SỬA LỖI: Thêm @context nội tuyến
@@ -271,7 +578,7 @@ export class AqiServiceService implements OnModuleInit {
         const entityUrl = `${this.ORION_LD_URL}/${encodeURIComponent(idToSync)}/attrs`;
         
         await firstValueFrom(
-          this.httpService.patch(entityUrl, patchPayload, { // 👈 CHẠY PATCH
+          this.httpService.patch(entityUrl, patchPayload, { 
             headers: { 'Content-Type': 'application/ld+json' },
           }),
         );
@@ -450,9 +757,11 @@ export class AqiServiceService implements OnModuleInit {
       throw new NotFoundException(`Không tìm thấy sự cố với ID: ${incidentId}`);
     }
 
+    // Cập nhật CSDL Postgres (Đã chạy đúng)
     incident.status = dto.status;
     await this.incidentRepository.save(incident);
     
+    // Chuẩn bị payload để PATCH
     const entityId = `urn:ngsi-ld:Incident:${incidentId}`;
     const patchPayload = {
       status: {
@@ -464,11 +773,29 @@ export class AqiServiceService implements OnModuleInit {
 
     try {
       this.logger.log(`Đang PATCH trạng thái (Status) lên Orion-LD: ${entityId}`);
-      // 🚀 SỬA LỖI: Truyền 2 tham số (để khớp với hàm syncToOrionLD đã sửa)
-      await this.syncToOrionLD(patchPayload, entityId); 
+      await this.syncToOrionLD(patchPayload, entityId); // 👈 Cố gắng PATCH
       
     } catch (error) {
-      this.logger.error(`Lỗi khi PATCH Incident Status lên Orion-LD`, error.message);
+      // 🚀 BẮT ĐẦU SỬA LỖI
+      // NẾU LỖI LÀ 404 (Không tìm thấy)
+      if (error?.response?.status === 404) {
+        this.logger.warn(`Entity ${entityId} không tồn tại trên Orion-LD. Đang thử tạo mới...`);
+        try {
+          // Lấy toàn bộ entity 'incident' mà chúng ta đã có
+          const fullPayload = this.formatIncidentToNgsiLd(incident);
+          
+          // Gọi syncToOrionLD (TRƯỜNG HỢP 2 - POST) để tạo mới
+          await this.syncToOrionLD(fullPayload); 
+          
+          this.logger.log(`✅ Đã tạo (đồng bộ) lại Entity ${entityId} thành công.`);
+        } catch (createError) {
+          this.logger.error(`Lỗi khi cố gắng tạo lại Entity ${entityId}`, createError.message);
+        }
+      } else {
+        // Nếu là lỗi khác (500, 400, v.v.) thì log như cũ
+        this.logger.error(`Lỗi khi PATCH Incident Status lên Orion-LD`, error.message);
+      }
+      // 🚀 KẾT THÚC SỬA LỖI
     }
     
     return incident;
