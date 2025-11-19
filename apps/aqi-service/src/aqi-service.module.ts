@@ -46,13 +46,13 @@ import { RoadFeature } from './entities/road-feature.entity';
       }),
     }),
 
-    // Đăng ký Entities cho Module (Giữ nguyên)
+    // Đăng ký Entities cho Module 
     TypeOrmModule.forFeature([IncidentType, Incident, AirQualityObservation, WeatherObservation, UrbanGreenSpace, SensitiveArea, RoadFeature]),
 
-    // Cấu hình Passport (Giữ nguyên)
+    // Cấu hình Passport 
     PassportModule.register({ defaultStrategy: 'jwt' }),
 
-    // 🚀 SỬA 2: DÙNG .registerAsync CHO JWT
+  
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

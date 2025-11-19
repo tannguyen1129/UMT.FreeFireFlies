@@ -11,11 +11,16 @@ import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 export class UserDataServiceService {
   private readonly logger = new Logger(UserDataServiceService.name);
 
-  // 🚀 SỬA 1: Khai báo biến
   private readonly orionLdSubscriptionsUrl: string;
-  private readonly publicWebhookUrl: string;
+  
+  // 🚀 SỬA QUAN TRỌNG: Trỏ thẳng vào Notification Service (Cổng 3004)
+  // IP 172.17.0.1 là cầu nối để Docker (Orion) gọi ra ngoài Host (Service)
+  private readonly webhookUrl = 'http://172.17.0.1:3004/api/notifications/webhook';
 
-  private readonly NGSI_LD_CONTEXT = '<https://smartdatamodels.org/context.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"';
+  private readonly NGSI_LD_CONTEXT = [
+    "https://smartdatamodels.org/context.jsonld",
+    "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.7.jsonld"
+  ];
 
   constructor(
     @InjectRepository(User)
@@ -23,39 +28,22 @@ export class UserDataServiceService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    // 🚀 SỬA 2: Lấy và Xử lý URL từ .env
-    
-    // Lấy ORION_LD_URL (ví dụ: http://.../v1/entities)
     const orionEntitiesUrl = this.configService.get<string>('ORION_LD_URL');
     if (!orionEntitiesUrl) {
       throw new Error('ORION_LD_URL is not defined in .env file');
     }
-    // Tự động suy ra URL subscriptions (thay /entities bằng /subscriptions)
     this.orionLdSubscriptionsUrl = orionEntitiesUrl.replace('/entities', '/subscriptions');
 
-    // Lấy URL công khai của API Gateway (bạn PHẢI thêm biến này vào .env)
-    const gatewayPublicUrl = this.configService.get<string>('API_GATEWAY_PUBLIC_URL');
-    if (!gatewayPublicUrl) {
-      throw new Error('API_GATEWAY_PUBLIC_URL is not defined in .env file. (Ví dụ: http://<IP_HOST_CỦA_BẠN>:3000)');
-    }
-    
-    // Webhook sẽ trỏ đến API Gateway, chứ KHÔNG trỏ trực tiếp đến aqi-service
-    this.publicWebhookUrl = `${gatewayPublicUrl}/aqi/notify-user`;
-    
     this.logger.log(`Orion-LD Subscriptions URL: ${this.orionLdSubscriptionsUrl}`);
-    this.logger.log(`Public Webhook Receiver URL: ${this.publicWebhookUrl}`);
+    this.logger.log(`Webhook URL (Fixed): ${this.webhookUrl}`);
   }
 
-  // ... (các hàm getProfile và findByEmail giữ nguyên) ...
   async getProfile(userId: string): Promise<Omit<User, 'password_hash'>> {
     const user = await this.userRepository.findOne({
       where: { user_id: userId },
       relations: ['roles'],
     });
-
-    if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng');
-    }
+    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
     const { password_hash, ...result } = user;
     return result;
   }
@@ -67,10 +55,6 @@ export class UserDataServiceService {
     });
   }
 
-
-  // ================================================================
-  // LOGIC TẠO ĐĂNG KÝ (SUBSCRIPTION)
-  // ================================================================
   async createAqiSubscription(userId: string, dto: CreateSubscriptionDto) {
     this.logger.log(`User ${userId} yêu cầu đăng ký cảnh báo AQI...`);
     const threshold = dto.threshold || 50;
@@ -86,21 +70,17 @@ export class UserDataServiceService {
         attributes: ['forecastedPM25', 'location', 'validFrom'],
         format: 'normalized',
         endpoint: {
-          // 🚀 SỬA 3: Sử dụng URL công khai đã được cấu hình
-          uri: this.publicWebhookUrl,
+          uri: this.webhookUrl, // 👈 Dùng URL cổng 3004
           accept: 'application/json',
         },
       },
+      '@context': this.NGSI_LD_CONTEXT,
     };
 
-    this.logger.log(`Đang POST Subscription lên ${this.orionLdSubscriptionsUrl}...`);
     try {
       await firstValueFrom(
         this.httpService.post(this.orionLdSubscriptionsUrl, subscriptionPayload, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Link': this.NGSI_LD_CONTEXT,
-          },
+          headers: { 'Content-Type': 'application/ld+json' },
           timeout: 5000,
         }),
       );

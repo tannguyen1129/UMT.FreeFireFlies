@@ -272,115 +272,92 @@ export class AqiServiceService implements OnModuleInit {
     this.logger.log(`✅ Successfully ingested and synced ${savedCount} OWM Weather grid point(s).`);
   }
 
-  // ================================================================
-  // AGENT 4: THU THẬP KHU VỰC NHẠY CẢM (MỞ RỘNG)
-  // ================================================================
-  @Cron(CronExpression.EVERY_DAY_AT_4AM) 
-  async handleSensitiveAreaIngestion() {
-    this.logger.log('Running Agent for Sensitive Areas (School, Hospital, Police, Military)...');
-    
-    const bbox = '10.35,106.24,11.18,107.02'; 
-    
-    const overpassQuery = `
-      [out:json][timeout:180];
-      (
-        way["amenity"="school"](${bbox});
-        way["amenity"="hospital"](${bbox});
-        way["amenity"="police"](${bbox});
-        way["landuse"="military"](${bbox});
-      );
-      out geom;
-    `;
-    
+  private async retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 5000): Promise<T> {
     try {
-      const response = await firstValueFrom(
-        this.httpService.post(this.overpassApiUrl, overpassQuery, {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          timeout: 180000, // 3 phút
-        }),
-      );
-
-      const elements = response.data?.elements || [];
-      if (elements.length === 0) {
-        this.logger.warn('⚠️ No sensitive areas found.');
-        return;
-      }
-
-      let savedCount = 0;
-      for (const element of elements) {
-        if (element.type !== 'way' || !element.geometry) continue; 
-        
-        const entity = this.formatOverpassToSensitiveArea(element);
-        if (!entity) continue;
-
-        await this.sensitiveAreaRepository.save(entity);
-        
-        const ngsiLdPayload = this.formatSensitiveAreaToNgsiLd(entity);
-        await this.syncToOrionLD(ngsiLdPayload);
-        savedCount++;
-      }
-      this.logger.log(`✅ Successfully ingested and synced ${savedCount} sensitive area(s).`);
-
+      return await operation();
     } catch (error) {
-       if (error.code === 'ECONNABORTED') {
-         this.logger.error('❌ Sensitive Area Ingestion timed out (180s)');
+      if (retries > 0) {
+        this.logger.warn(`⚠️ Operation failed, retrying in ${delay}ms... (${retries} left)`);
+        await sleep(delay);
+        return this.retryOperation(operation, retries - 1, delay * 2); // Tăng thời gian chờ (Exponential Backoff)
       } else {
-         // 🚀 LOG CHI TIẾT LỖI RA
-         this.logger.error('❌ Failed to ingest Sensitive Areas', error.stack);
+        throw error;
       }
     }
   }
 
   // ================================================================
-  // AGENT 5: THU THẬP ĐẶC TRƯNG ĐƯỜNG BỘ (ROAD FEATURE - MỚI)
+  // 🏥 AGENT 4: SENSITIVE AREA (TỐI ƯU HÓA)
+  // ================================================================
+  @Cron(CronExpression.EVERY_DAY_AT_4AM) 
+  async handleSensitiveAreaIngestion() {
+    this.logger.log('Running Agent for Sensitive Areas (Optimized)...');
+    const bbox = '10.35,106.24,11.18,107.02'; 
+    const overpassQuery = `[out:json][timeout:180];(way["amenity"~"school|hospital|police"](${bbox});way["landuse"="military"](${bbox}););out geom;`;
+    
+    try {
+      // Dùng retry cho call lớn này
+      const response = await this.retryOperation(() => 
+        firstValueFrom(
+          this.httpService.post(this.overpassApiUrl, overpassQuery, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 180000, 
+          })
+        ), 3, 10000 // Thử lại 3 lần, chờ 10s
+      );
+
+      const elements = response.data?.elements || [];
+      let savedCount = 0;
+      for (const element of elements) {
+        if (element.type !== 'way' || !element.geometry) continue; 
+        const entity = this.formatOverpassToSensitiveArea(element);
+        if (!entity) continue;
+        await this.sensitiveAreaRepository.save(entity);
+        const ngsiLdPayload = this.formatSensitiveAreaToNgsiLd(entity);
+        await this.syncToOrionLD(ngsiLdPayload);
+        savedCount++;
+      }
+      this.logger.log(`✅ Successfully ingested and synced ${savedCount} sensitive area(s).`);
+    } catch (error) {
+       this.logger.error('❌ Failed to ingest Sensitive Areas (After retries)', error.message);
+    }
+  }
+
+  // ================================================================
+  // 🛣️ AGENT 5: ROAD FEATURES (TỐI ƯU HÓA)
   // ================================================================
   @Cron(CronExpression.EVERY_WEEK)
   async handleRoadFeatureIngestion() {
-    this.logger.log(`Running Agent for Road Features (Major Road Count)...`);
+    this.logger.log(`Running Agent for Road Features (Optimized)...`);
     
     let savedCount = 0;
     
     for (const gridPoint of HCMC_GRID) {
         const stationId = `urn:ngsi-ld:AirQualityStation:OWM-${gridPoint.id}`;
-        
-        // Tăng timeout trong query lên 90s
-        const overpassQuery = `
-            [out:json][timeout:90]; 
-            (
-              way(around:500, ${gridPoint.lat}, ${gridPoint.lon})["highway"="primary"];
-              way(around:500, ${gridPoint.lat}, ${gridPoint.lon})["highway"="secondary"];
-            );
-            out count;
-        `;
+        const overpassQuery = `[out:json][timeout:90];(way(around:500, ${gridPoint.lat}, ${gridPoint.lon})["highway"~"primary|secondary"];);out count;`;
 
         try {
-            const response = await firstValueFrom(
-                this.httpService.post(this.overpassApiUrl, overpassQuery, {
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    timeout: 100000, // 100s
-                }),
+            // Dùng retry cho từng điểm
+            const response = await this.retryOperation(() => 
+                firstValueFrom(
+                    this.httpService.post(this.overpassApiUrl, overpassQuery, {
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        timeout: 60000, 
+                    })
+                ), 2, 5000 // Thử lại 2 lần, chờ 5s
             );
             
-            const countElement = response.data?.elements?.[0];
-            const count = countElement?.tags?.total || 0; 
-
-            await this.roadFeatureRepository.upsert(
-                {
-                    entity_id: stationId,
-                    majorRoadCount: parseInt(count, 10),
-                },
-                ['entity_id'] 
-            );
+            const count = response.data?.elements?.[0]?.tags?.total || 0; 
+            await this.roadFeatureRepository.upsert({ entity_id: stationId, majorRoadCount: parseInt(count, 10) }, ['entity_id']);
             savedCount++;
-
             this.logger.log(`[RoadFeature] ${gridPoint.id}: ${count} major roads.`);
 
         } catch (error) {
-            this.logger.error(`❌ Failed to ingest Road Features for ${gridPoint.id}`, error.message);
+            this.logger.error(`❌ Failed ${gridPoint.id} (Final): ${error.message}`);
         }
 
-        // HỜ 5 GIÂY TRƯỚC KHI GỌI TIẾP (TRÁNH RATE LIMIT)
-        await sleep(5000);
+        // 🚀 TĂNG THỜI GIAN NGHỈ LÊN 10 GIÂY
+        await sleep(10000); 
     }
     
     this.logger.log(`✅ Successfully ingested and synced ${savedCount} Road Features.`);

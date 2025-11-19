@@ -46,6 +46,15 @@
         "tsConfigPath": "apps/green-aqi-navigator/tsconfig.app.json"
       }
     },
+    "notification-service": {
+      "type": "application",
+      "root": "apps/notification-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/notification-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/notification-service/tsconfig.app.json"
+      }
+    },
     "user-data-service": {
       "type": "application",
       "root": "apps/user-data-service",
