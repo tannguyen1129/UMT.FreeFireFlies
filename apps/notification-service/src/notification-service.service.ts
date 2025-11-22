@@ -3,16 +3,16 @@ import { Cron } from '@nestjs/schedule';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import * as admin from 'firebase-admin';
-import * as fs from 'fs'; // 👈 QUAN TRỌNG: Import module File System
+import * as fs from 'fs';
 
 @Injectable()
 export class NotificationServiceService implements OnModuleInit {
   private readonly logger = new Logger(NotificationServiceService.name);
   
-  // URL gốc của Orion (để quét tất cả dự báo)
+  // URL của Orion-LD (Gọi localhost vì service này chạy trên Host)
   private readonly ORION_URL = 'http://localhost:1026/ngsi-ld/v1/entities';
 
-  // BỘ NHỚ ĐỆM CHỐNG SPAM (30 phút)
+  // Bộ nhớ đệm để tránh Spam (Cooldown 30 phút)
   private lastSentTime: Map<string, number> = new Map();
   private readonly COOLDOWN_MS = 30 * 60 * 1000; 
 
@@ -20,40 +20,32 @@ export class NotificationServiceService implements OnModuleInit {
 
   onModuleInit() {
     try {
-      // FIX: Trỏ cứng vào đường dẫn tuyệt đối trên server
+      // Đường dẫn tuyệt đối đến file key Firebase
       const serviceAccountPath = '/root/open-source/green-aqi-navigator/apps/notification-service/firebase-admin-key.json';
 
-      this.logger.log(`🔎 Loading Firebase key from: ${serviceAccountPath}`);
-      
-      // 1. Kiểm tra file có tồn tại không
       if (!fs.existsSync(serviceAccountPath)) {
-          throw new Error(`❌ File key KHÔNG TỒN TẠI tại: ${serviceAccountPath}`);
+         throw new Error(`❌ File key KHÔNG TỒN TẠI tại: ${serviceAccountPath}`);
       }
 
-      // 2. Đọc file bằng fs (Thay vì require để tránh lỗi Webpack)
       const rawData = fs.readFileSync(serviceAccountPath, 'utf-8');
       const serviceAccount = JSON.parse(rawData);
 
-      // 3. Khởi tạo Firebase (Kiểm tra xem đã init chưa để tránh lỗi duplicate)
       if (!admin.apps.length) {
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
         this.logger.log('✅ Firebase Admin Initialized successfully');
-      } else {
-        this.logger.log('ℹ️ Firebase App already initialized');
       }
-
     } catch (error) {
       this.logger.error('❌ Lỗi khởi tạo Firebase:', error.message);
-      // Không throw lỗi để App vẫn chạy tiếp các chức năng khác
     }
   }
 
+  // 🚀 CHẠY MỖI 1 PHÚT (POLLING)
   @Cron('*/1 * * * *') 
   async checkAirQualityAndNotify() {
-    // ... (Hàm này giữ nguyên logic Polling)
     try {
+      // 1. Chủ động gọi Orion-LD để lấy TẤT CẢ dự báo
       const response = await firstValueFrom(
         this.httpService.get(this.ORION_URL, {
           params: { type: 'AirQualityForecast', limit: 100 },
@@ -83,15 +75,17 @@ export class NotificationServiceService implements OnModuleInit {
     
     if (!pm25 || !timeStr) return;
 
-    // Xử lý lấy tên quận từ ID (VD: urn:ngsi-ld:AirQualityForecast:Hanoi:Winter:2025:OWM-TayHo -> TayHo)
-    // Lưu ý: Logic split này tuỳ thuộc vào format ID thực tế của bạn
+    // Lấy tên khu vực từ ID
     const districtName = stationId.split(':').pop().replace('OWM-', '');
 
-    // Kiểm tra Cooldown
+    // Kiểm tra Cooldown (Chống spam)
     const lastTime = this.lastSentTime.get(districtName) || 0;
     const now = Date.now();
+    
+    // Nếu chưa đủ 30 phút -> Bỏ qua
     if (now - lastTime < this.COOLDOWN_MS) return;
     
+    // Kiểm tra điều kiện (Ngưỡng > 40)
     if (pm25 > 40) {
       this.sendAlert(districtName, pm25, timeStr);
       this.lastSentTime.set(districtName, now); // Cập nhật giờ gửi
@@ -101,7 +95,6 @@ export class NotificationServiceService implements OnModuleInit {
   private async sendAlert(location: string, pm25: number, time: string) {
     this.logger.warn(`🔔 --- PHÁT HIỆN KHÔNG KHÍ XẤU TẠI ${location.toUpperCase()} ---`);
     
-    // Kiểm tra nếu Firebase chưa init thì không gửi được
     if (!admin.apps.length) {
       this.logger.error('⚠️ Bỏ qua gửi thông báo vì Firebase chưa khởi tạo thành công.');
       return;
@@ -112,13 +105,12 @@ export class NotificationServiceService implements OnModuleInit {
         title: '⚠️ Cảnh báo Chất lượng Không khí!',
         body: `Khu vực ${location} đang có chỉ số PM2.5 cao (${pm25} µg/m³). Hãy đeo khẩu trang!`,
       },
-      topic: 'general_alerts', // Gửi cho tất cả máy đã đăng ký topic này
+      topic: 'general_alerts', 
     };
 
     try {
-      // 🚀 GỬI MESSAGE QUA FCM
       await admin.messaging().send({
-          notification: message.notification as any, // Cast type nếu cần thiết
+          notification: message.notification as any,
           topic: message.topic,
       });
 
