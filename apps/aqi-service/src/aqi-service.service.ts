@@ -769,53 +769,47 @@ export class AqiServiceService implements OnModuleInit {
   async updateIncidentStatus(incidentId: string, dto: UpdateIncidentStatusDto): Promise<Incident> {
     this.logger.log(`--- (Tầng 2) Đang cập nhật trạng thái Incident ID: ${incidentId} -> ${dto.status}`);
 
-    const incident = await this.incidentRepository.findOneBy({ incident_id: incidentId });
+    // 1. Lấy thông tin Incident (để biết ai là người báo cáo)
+    const incident = await this.incidentRepository.findOne({
+        where: { incident_id: incidentId },
+        relations: ['incidentType'] // Load thêm thông tin để hiển thị nếu cần
+    });
+
     if (!incident) {
       throw new NotFoundException(`Không tìm thấy sự cố với ID: ${incidentId}`);
     }
 
-    // Cập nhật CSDL Postgres (Đã chạy đúng)
+    // 2. Cập nhật CSDL
     incident.status = dto.status;
     await this.incidentRepository.save(incident);
     
-    // Chuẩn bị payload để PATCH
+    // 3. Cập nhật Orion-LD (Giữ nguyên code cũ)
     const entityId = `urn:ngsi-ld:Incident:${incidentId}`;
-    const patchPayload = {
-      status: {
-        type: 'Property',
-        value: dto.status,
-      },
-      '@context': this.NGSI_LD_CONTEXT,
-    };
+    const patchPayload = { status: { type: 'Property', value: dto.status }, '@context': this.NGSI_LD_CONTEXT };
+    this.syncToOrionLD(patchPayload, entityId).catch(e => this.logger.error('Sync Error', e));
 
-    try {
-      this.logger.log(`Đang PATCH trạng thái (Status) lên Orion-LD: ${entityId}`);
-      await this.syncToOrionLD(patchPayload, entityId); // 👈 Cố gắng PATCH
-      
-    } catch (error) {
-      // 🚀 BẮT ĐẦU SỬA LỖI
-      // NẾU LỖI LÀ 404 (Không tìm thấy)
-      if (error?.response?.status === 404) {
-        this.logger.warn(`Entity ${entityId} không tồn tại trên Orion-LD. Đang thử tạo mới...`);
-        try {
-          // Lấy toàn bộ entity 'incident' mà chúng ta đã có
-          const fullPayload = this.formatIncidentToNgsiLd(incident);
-          
-          // Gọi syncToOrionLD (TRƯỜNG HỢP 2 - POST) để tạo mới
-          await this.syncToOrionLD(fullPayload); 
-          
-          this.logger.log(`✅ Đã tạo (đồng bộ) lại Entity ${entityId} thành công.`);
-        } catch (createError) {
-          this.logger.error(`Lỗi khi cố gắng tạo lại Entity ${entityId}`, createError.message);
-        }
-      } else {
-        // Nếu là lỗi khác (500, 400, v.v.) thì log như cũ
-        this.logger.error(`Lỗi khi PATCH Incident Status lên Orion-LD`, error.message);
-      }
-      // 🚀 KẾT THÚC SỬA LỖI
-    }
+    // 🚀 4. GỌI NOTIFICATION SERVICE (MỚI)
+    // Gọi bất đồng bộ (không await) để không chặn UI của Admin
+    this.notifyUserAboutIncident(incident.reported_by_user_id, incident.status, incident.description);
     
     return incident;
+  }
+
+  // 🚀 HÀM HELPER MỚI (Thêm vào trong class)
+  private async notifyUserAboutIncident(userId: string, status: string, description: string) {
+      try {
+          // Gọi sang Notification Service chạy ở cổng 3004
+          await firstValueFrom(
+              this.httpService.post('http://localhost:3004/api/notify-incident', {
+                  userId,
+                  status,
+                  description
+              })
+          );
+          this.logger.log(`📞 Đã gọi Notification Service cho User ${userId}`);
+      } catch (e) {
+          this.logger.error(`❌ Không gọi được Notification Service: ${e.message}`);
+      }
   }
 
   // 🚀 SỬA LỖI: Thêm @context nội tuyến
@@ -862,7 +856,7 @@ export class AqiServiceService implements OnModuleInit {
     const incidentStats = await this.incidentRepository
       .createQueryBuilder('inc')
       .select('inc.status', 'status')
-      .addSelect('COUNT(inc.incident_id)', 'count')
+      .addSelect('COUNT(*)', 'count') // Đếm tất cả
       .groupBy('inc.status')
       .getRawMany();
 
@@ -875,6 +869,15 @@ export class AqiServiceService implements OnModuleInit {
       .where("obs.time > NOW() - INTERVAL '1 hour'") // Lấy trung bình 1 giờ qua
       .groupBy('obs.entity_id')
       .getRawMany();
+    
+      // LOG RA ĐỂ DEBUG
+    this.logger.log(`📊 Incident Stats Raw: ${JSON.stringify(incidentStats)}`);
+
+    // Chuyển đổi count từ string sang number (QUAN TRỌNG)
+    const formattedIncidents = incidentStats.map(item => ({
+        status: item.status,
+        count: parseInt(item.count, 10) || 0
+    }));
 
     // Bước 3b: Lấy dữ liệu Road Feature (Số lượng đường)
     const roadFeatures = await this.roadFeatureRepository.find();
@@ -895,8 +898,16 @@ export class AqiServiceService implements OnModuleInit {
     // Trả về object tổng hợp
     return {
       trend: trendData,       // Dữ liệu cho Biểu đồ Đường
-      incidents: incidentStats, // Dữ liệu cho Biểu đồ Tròn
+      incidents: formattedIncidents, // Dữ liệu cho Biểu đồ Tròn
       correlation: correlationData // Dữ liệu cho Biểu đồ Phân tán/Cột
     };
   }
+
+  async findAllPerceptions() {
+    return this.perceptionRepository.find({
+      order: { createdAt: 'DESC' }, // Lấy mới nhất
+      take: 100, // Giới hạn 100 điểm để không lag bản đồ
+    });
+  }
+
 }

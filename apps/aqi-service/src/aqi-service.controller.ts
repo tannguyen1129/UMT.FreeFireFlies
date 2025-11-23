@@ -59,6 +59,12 @@ export class AqiServiceController {
     return this.aqiServiceService.getAnalyticsData();
   }
 
+  @Get('/perceptions')
+  @UseGuards(AuthGuard('jwt'))
+  async findAllPerceptions() {
+    return this.aqiServiceService.findAllPerceptions();
+  }
+
   // --- API MỚI: UPLOAD ẢNH ---
   @Post('upload')
   @UseGuards(AuthGuard('jwt')) // Chỉ user đăng nhập mới được up

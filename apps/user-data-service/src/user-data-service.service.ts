@@ -101,14 +101,14 @@ export class UserDataServiceService {
 
   async updateProfile(userId: string, dto: UpdateUserDto): Promise<User> {
     const user = await this.userRepository.findOneBy({ user_id: userId });
-    if (!user) {
-      throw new NotFoundException('Người dùng không tồn tại');
-    }
+    if (!user) throw new NotFoundException('User not found');
 
-    // Cập nhật từng trường nếu có gửi lên
     if (dto.full_name) user.full_name = dto.full_name;
     if (dto.phone_number) user.phone_number = dto.phone_number;
     if (dto.agency_department) user.agency_department = dto.agency_department;
+    
+    // 🚀 THÊM DÒNG NÀY
+    if (dto.health_group) user.health_group = dto.health_group;
 
     return this.userRepository.save(user);
   }

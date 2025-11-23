@@ -119,4 +119,39 @@ export class NotificationServiceService implements OnModuleInit {
       this.logger.error('❌ Lỗi khi bắn FCM:', error.message);
     }
   }
+
+  async sendIncidentNotification(userId: string, status: string, description: string) {
+    if (!admin.apps.length) return;
+
+    let title = 'Cập nhật Sự cố';
+    let bodyMsg = `Báo cáo "${description}" của bạn đã được cập nhật.`;
+
+    if (status === 'verified') {
+      title = '✅ Báo cáo đã được Tiếp nhận';
+      bodyMsg = 'Sự cố bạn báo cáo đã được xác minh và đang chờ xử lý.';
+    } else if (status === 'resolved') {
+      title = '🎉 Sự cố đã được Giải quyết!';
+      bodyMsg = 'Cảm ơn đóng góp của bạn. Sự cố đã được xử lý xong.';
+    } else if (status === 'rejected') {
+      title = '❌ Báo cáo bị Từ chối';
+      bodyMsg = 'Báo cáo của bạn không hợp lệ hoặc không thể xác minh.';
+    }
+
+    const message = {
+      notification: {
+        title: title,
+        body: bodyMsg,
+      },
+      topic: `user_${userId}`, // 👈 Gửi đúng vào topic của user này
+    };
+
+    try {
+      await admin.messaging().send(message);
+      this.logger.log(`🚀 Đã gửi FCM tới user_${userId}: ${status}`);
+    } catch (error) {
+      this.logger.error(`❌ Lỗi gửi FCM Incident:`, error.message);
+    }
+  }
+
+
 }

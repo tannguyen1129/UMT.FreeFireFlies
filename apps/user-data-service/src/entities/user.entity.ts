@@ -37,6 +37,9 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   last_login: Date;
 
+  @Column({ length: 50, nullable: true, default: 'normal' })
+  health_group: string;
+
   // Định nghĩa quan hệ Nhiều-Nhiều với Role
   @ManyToMany(() => Role, { eager: true }) 
   @JoinTable({
