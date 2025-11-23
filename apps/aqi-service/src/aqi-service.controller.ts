@@ -3,8 +3,8 @@ import {
   Post,
   Get,
   Patch, 
-  Put,    // 👈 Đã import
-  Delete, // 👈 Đã import
+  Put,    
+  Delete, 
   Param, 
   UseGuards,
   Req,
@@ -12,8 +12,14 @@ import {
   ValidationPipe,
   Query,
   HttpCode,
-  ParseIntPipe, // 👈 Đã import
+  ParseIntPipe,
+  UseInterceptors, 
+  UploadedFile, 
+  BadRequestException 
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { AqiServiceService } from './aqi-service.service';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
@@ -24,22 +30,60 @@ import { RoutePlannerService } from './route-planner.service';
 import { GetRecommendationDto } from './dto/get-recommendation.dto';
 import { GetGreenSpacesDto } from './dto/get-green-spaces.dto';
 import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto'; 
-import { ManageIncidentTypeDto } from './dto/manage-incident-type.dto'; // 👈 Đã import
+import { ManageIncidentTypeDto } from './dto/manage-incident-type.dto';
+import { CreatePerceptionDto } from './dto/create-perception.dto';
 
 @Controller('aqi') 
-// ⚠️ Bỏ UseGuards ở cấp Controller (để Webhook hoạt động)
+
 export class AqiServiceController {
   constructor(
     private readonly aqiServiceService: AqiServiceService,
     private readonly routePlannerService: RoutePlannerService, 
   ) {}
 
-  // --- API WEBHOOK (CHO ORION-LD) ---
-  @Post('/notify-user')
-  @HttpCode(204) 
-  async handleOrionNotification(@Body() payload: any) {
-    this.aqiServiceService.handleAqiAlertNotification(payload);
-    return; 
+  // --- API MỚI: BÁO CÁO CẢM NHẬN ---
+  @Post('/perceptions')
+  @UseGuards(AuthGuard('jwt'))
+  async createPerception(
+    @Req() req: Request,
+    @Body(new ValidationPipe()) dto: CreatePerceptionDto,
+  ) {
+    const user = req.user as { userId: string };
+    return this.aqiServiceService.createPerception(dto, user.userId);
+  }
+
+  @Get('/analytics')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('admin', 'government_official') // Chỉ Admin/Gov mới xem được
+  async getAnalytics() {
+    return this.aqiServiceService.getAnalyticsData();
+  }
+
+  // --- API MỚI: UPLOAD ẢNH ---
+  @Post('upload')
+  @UseGuards(AuthGuard('jwt')) // Chỉ user đăng nhập mới được up
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: './uploads', 
+      filename: (req, file, callback) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = extname(file.originalname);
+        callback(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+      },
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 }, // Giới hạn 5MB
+  }))
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Không có file nào được tải lên');
+    }
+    
+    // Trả về đường dẫn đầy đủ để Frontend lưu vào DB
+    // Lưu ý: Thay localhost bằng IP Tĩnh WSL (172.27.144.1) hoặc IP Public VPS
+    const serverUrl = 'http://172.27.144.1:3002'; 
+    return { 
+      url: `${serverUrl}/uploads/${file.filename}` 
+    };
   }
 
   // --- 🚀 API MỚI: TÌM KHU VỰC NHẠY CẢM ---

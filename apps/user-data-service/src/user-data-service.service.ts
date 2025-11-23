@@ -6,6 +6,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserDataServiceService {
@@ -97,4 +98,19 @@ export class UserDataServiceService {
       throw new Error('Không thể tạo đăng ký với Context Broker');
     }
   }
+
+  async updateProfile(userId: string, dto: UpdateUserDto): Promise<User> {
+    const user = await this.userRepository.findOneBy({ user_id: userId });
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    // Cập nhật từng trường nếu có gửi lên
+    if (dto.full_name) user.full_name = dto.full_name;
+    if (dto.phone_number) user.phone_number = dto.phone_number;
+    if (dto.agency_department) user.agency_department = dto.agency_department;
+
+    return this.userRepository.save(user);
+  }
+
 }

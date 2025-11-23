@@ -11,10 +11,11 @@ async function bootstrap() {
   app.use(json({ limit: '50mb' })); // 👈 2. THÊM VÀO
   app.use(urlencoded({ limit: '50mb', extended: true })); // 👈 3. THÊM VÀO
 
-  // 🚀 BẬT CORS
   app.enableCors({
-    origin: '*', // Cho phép tất cả (chỉ dùng khi dev)
-  });
+    origin: true, 
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  })
 
   await app.listen(3000, '0.0.0.0');
 }

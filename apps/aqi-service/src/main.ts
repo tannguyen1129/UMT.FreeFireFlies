@@ -1,25 +1,32 @@
-// apps/aqi-service/src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { AqiServiceModule } from './aqi-service.module';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, urlencoded } from 'express';
-import * as dotenv from 'dotenv'; // 👈 1. IMPORT dotenv
+import { join } from 'path'; // 👈 1. BỔ SUNG IMPORT NÀY
+import * as dotenv from 'dotenv';
 
-dotenv.config(); // 👈 2. GỌI dotenv.config() NGAY LẬP TỨC
+dotenv.config();
 
 async function bootstrap() {
-  const app = await NestFactory.create(AqiServiceModule);
+  const app = await NestFactory.create<NestExpressApplication>(AqiServiceModule);
 
+  // Cấu hình giới hạn dung lượng body (cho upload ảnh)
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ limit: '50mb', extended: true }));
+  
+  // Cấu hình CORS
   app.enableCors({ origin: '*' });
 
-  // 🚀 3. SỬA LẠI HÀM LISTEN
-  // Đọc HOST và PORT từ process.env (đã được dotenv tải)
-  const host = process.env.HOST || '127.0.0.1';
-  const port = process.env.PORT_AQI || 3002; // Dùng PORT_AQI hoặc 3002
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
-  await app.listen(port, host); // 👈 SỬA LẠI DÒNG NÀY
+  const host = process.env.HOST || '0.0.0.0'; 
+  const port = process.env.PORT_AQI || 3002;
+
+  await app.listen(port, host);
   
-  console.log(`AqiService is running on: http://${host}:${port}`); // 👈 Sửa log
+  console.log(`🚀 AqiService is running on: http://${host}:${port}`);
+  console.log(`📂 Static Assets serving at: http://${host}:${port}/uploads/`);
 }
 bootstrap();
