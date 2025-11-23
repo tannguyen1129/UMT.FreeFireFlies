@@ -15,6 +15,8 @@ import { SensitiveArea } from './entities/sensitive-area.entity';
 import { RoadFeature } from './entities/road-feature.entity';
 import { ManageIncidentTypeDto } from './dto/manage-incident-type.dto';
 import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
+import { PerceivedAirQuality } from './entities/perceived-air-quality.entity';
+import { CreatePerceptionDto } from './dto/create-perception.dto';
 import type { Polygon } from 'geojson'; 
 
 const HCMC_GRID = [
@@ -62,6 +64,8 @@ export class AqiServiceService implements OnModuleInit {
     private readonly sensitiveAreaRepository: Repository<SensitiveArea>,
     @InjectRepository(RoadFeature) 
     private readonly roadFeatureRepository: Repository<RoadFeature>,
+    @InjectRepository(PerceivedAirQuality) 
+    private readonly perceptionRepository: Repository<PerceivedAirQuality>,
 
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
@@ -361,6 +365,42 @@ export class AqiServiceService implements OnModuleInit {
     }
     
     this.logger.log(`✅ Successfully ingested and synced ${savedCount} Road Features.`);
+  }
+
+  // 🚀 TÍNH NĂNG 6: KHOA HỌC CÔNG DÂN
+  async createPerception(dto: CreatePerceptionDto, userId: string) {
+    this.logger.log(`User ${userId} báo cáo cảm nhận: Mức ${dto.feeling}`);
+
+    // 1. Lưu vào PostgreSQL
+    const perception = this.perceptionRepository.create({
+      userId: userId,
+      feeling: dto.feeling,
+      location: {
+        type: 'Point',
+        coordinates: [dto.longitude, dto.latitude],
+      },
+    });
+    const saved = await this.perceptionRepository.save(perception);
+
+    // 2. Đồng bộ lên Orion-LD (Chạy nền)
+    const ngsiLdPayload = {
+      id: `urn:ngsi-ld:PerceivedAirQuality:${saved.id}`,
+      type: 'PerceivedAirQuality',
+      dateObserved: {
+        type: 'Property',
+        value: { '@type': 'DateTime', '@value': saved.createdAt.toISOString() }
+      },
+      location: { type: 'GeoProperty', value: saved.location },
+      feeling: { type: 'Property', value: saved.feeling },
+      reportedBy: { type: 'Relationship', object: `urn:ngsi-ld:User:${userId}` },
+      '@context': this.NGSI_LD_CONTEXT
+    };
+
+    this.syncToOrionLD(ngsiLdPayload).catch(e => 
+      this.logger.error('Lỗi sync PerceivedAirQuality', e.message)
+    );
+
+    return saved;
   }
 
   // ================================================================
@@ -803,17 +843,60 @@ export class AqiServiceService implements OnModuleInit {
     };
   }
 
-  async handleAqiAlertNotification(payload: any) {
-    this.logger.warn('--- (WEBHOOK) NHẬN ĐƯỢC CẢNH BÁO AQI TỪ ORION-LD ---');
-    this.logger.log(JSON.stringify(payload, null, 2));
+  async getAnalyticsData() {
+    this.logger.log('--- (Tầng 2) Đang tổng hợp dữ liệu Analytics...');
 
-    const subscriptionId = payload.subscriptionId as string;
-    const userId = subscriptionId.split(':')[3]; 
-    const data = payload.data[0];
-    const pm25 = data.forecastedPM25.value;
-    
-    this.logger.warn(`🔔 CẢNH BÁO CHO USER ${userId}: PM2.5 dự báo là ${pm25}! (Vượt ngưỡng)`);
-    // TODO: Gửi Push Notification (Firebase)
-    return;
+    // 1. XU HƯỚNG AQI (24 Giờ qua)
+    // SQL: SELECT date_trunc('hour', time) as hour, AVG(pm2_5) FROM air_quality... GROUP BY hour
+    const trendData = await this.observationRepository
+      .createQueryBuilder('obs')
+      .select("DATE_TRUNC('hour', obs.time)", 'hour')
+      .addSelect('AVG(obs.pm2_5)', 'avg_pm25')
+      .where("obs.time > NOW() - INTERVAL '24 hours'")
+      .groupBy('hour')
+      .orderBy('hour', 'ASC')
+      .getRawMany();
+
+    // 2. THỐNG KÊ SỰ CỐ (Theo trạng thái)
+    // SQL: SELECT status, COUNT(*) FROM incidents GROUP BY status
+    const incidentStats = await this.incidentRepository
+      .createQueryBuilder('inc')
+      .select('inc.status', 'status')
+      .addSelect('COUNT(inc.incident_id)', 'count')
+      .groupBy('inc.status')
+      .getRawMany();
+
+    // 3. TƯƠNG QUAN: GIAO THÔNG vs Ô NHIỄM (Theo Trạm)
+    // Bước 3a: Lấy PM2.5 trung bình hiện tại của từng trạm
+    const stationStats = await this.observationRepository
+      .createQueryBuilder('obs')
+      .select('obs.entity_id', 'entity_id')
+      .addSelect('AVG(obs.pm2_5)', 'avg_pm25')
+      .where("obs.time > NOW() - INTERVAL '1 hour'") // Lấy trung bình 1 giờ qua
+      .groupBy('obs.entity_id')
+      .getRawMany();
+
+    // Bước 3b: Lấy dữ liệu Road Feature (Số lượng đường)
+    const roadFeatures = await this.roadFeatureRepository.find();
+
+    // Bước 3c: Gộp lại (Join trong code)
+    const correlationData = stationStats.map((stat) => {
+      const roadData = roadFeatures.find((r) => r.entity_id === stat.entity_id);
+      // Lấy tên quận từ ID (urn:ngsi-ld:...:OWM-ThuDuc -> ThuDuc)
+      const districtName = stat.entity_id.split('-').pop();
+      
+      return {
+        district: districtName,
+        pm25: parseFloat(stat.avg_pm25), // Ép kiểu về số
+        roadCount: roadData ? roadData.majorRoadCount : 0,
+      };
+    });
+
+    // Trả về object tổng hợp
+    return {
+      trend: trendData,       // Dữ liệu cho Biểu đồ Đường
+      incidents: incidentStats, // Dữ liệu cho Biểu đồ Tròn
+      correlation: correlationData // Dữ liệu cho Biểu đồ Phân tán/Cột
+    };
   }
 }
