@@ -113,4 +113,22 @@ export class UserDataServiceService {
     return this.userRepository.save(user);
   }
 
+  async addGreenPoints(userId: string, points: number) {
+    const user = await this.userRepository.findOneBy({ user_id: userId });
+    if (user) {
+      user.greenPoints = (user.greenPoints || 0) + points;
+      await this.userRepository.save(user);
+      return { currentPoints: user.greenPoints, added: points };
+    }
+  }
+
+  async getLeaderboard(): Promise<User[]> {
+    return this.userRepository.find({
+      order: { greenPoints: 'DESC' },
+      take: 10,
+      select: ['full_name', 'greenPoints'], 
+      loadEagerRelations: false, 
+    });
+  }
+
 }

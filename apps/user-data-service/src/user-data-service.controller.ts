@@ -31,6 +31,18 @@ export class UserDataServiceController {
     return this.userDataServiceService.getProfile(user.userId); 
   }
 
+  @Post('add-points')
+  @UseGuards(AuthGuard('jwt'))
+  async addPoints(@Req() req: Request, @Body('points') points: number) {
+    const user = req.user as { userId: string };
+    return this.userDataServiceService.addGreenPoints(user.userId, points);
+  }
+
+  @Get('leaderboard')
+  async getLeaderboard() {
+    // Lấy Top 10 user có điểm cao nhất
+    return this.userDataServiceService.getLeaderboard();
+  }
 
   @Post('subscribe-aqi') 
   @UseGuards(AuthGuard('jwt'))
