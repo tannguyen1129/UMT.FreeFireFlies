@@ -40,6 +40,9 @@ export class User {
   @Column({ length: 50, nullable: true, default: 'normal' })
   health_group: string;
 
+  @Column({ name: 'green_points', type: 'int', default: 0 }) 
+  greenPoints: number;
+
   // Định nghĩa quan hệ Nhiều-Nhiều với Role
   @ManyToMany(() => Role, { eager: true }) 
   @JoinTable({
