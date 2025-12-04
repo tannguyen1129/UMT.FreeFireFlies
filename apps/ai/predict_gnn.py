@@ -8,7 +8,7 @@ import json
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from gnn_model import ST_GNN # Import class mô hình
+from gnn_model import ST_GNN
 
 # Cấu hình
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,8 +34,7 @@ def get_db_engine():
     return create_engine(db_url), os.getenv('ORION_LD_URL')
 
 def get_latest_network_data(engine):
-    """Lấy dữ liệu mới nhất của TOÀN BỘ 9 trạm để tạo thành 1 snapshot"""
-    data_matrix = [] # Sẽ chứa [Num_Nodes, Seq_Len]
+    data_matrix = [] 
     latest_time = None
 
     for grid_point in HCMC_GRID:
@@ -52,15 +51,12 @@ def get_latest_network_data(engine):
         if len(df) < SEQ_LENGTH:
             raise ValueError(f"Trạm {grid_point['id']} không đủ dữ liệu")
         
-        # Đảo ngược để đúng thứ tự thời gian (Cũ -> Mới)
         values = df['pm2_5'].values[::-1]
         data_matrix.append(values)
         
-        # Lấy thời gian của điểm dữ liệu mới nhất
         if latest_time is None:
             latest_time = df['time'].iloc[0]
 
-    # Kết quả shape: [Num_Nodes, Seq_Len] -> Chuyển thành [Num_Nodes, Seq_Len, 1]
     return np.array(data_matrix)[..., np.newaxis], pd.to_datetime(latest_time)
 
 def sync_to_orion(orion_url, grid_point, value, time):
@@ -77,21 +73,36 @@ def sync_to_orion(orion_url, grid_point, value, time):
     }
     
     headers = { 'Content-Type': 'application/ld+json' }
+    
     try:
-        requests.post(orion_url, headers=headers, data=json.dumps(payload))
-        print(f"✅ [GNN] Tạo mới: {grid_point['id']} -> {payload['forecastedPM25']['value']}")
-    except:
-        # Nếu đã tồn tại thì Patch
-        patch_payload = { "forecastedPM25": payload["forecastedPM25"], "validFrom": payload["validFrom"] }
-        requests.patch(f"{orion_url}/{entity_id}/attrs", headers={'Content-Type': 'application/json'}, data=json.dumps(patch_payload))
-        print(f"🔄 [GNN] Cập nhật: {grid_point['id']} -> {payload['forecastedPM25']['value']}")
+        # 🚀 FIX QUAN TRỌNG: Thêm .raise_for_status() để bắt lỗi 422/409
+        resp = requests.post(orion_url, headers=headers, data=json.dumps(payload))
+        resp.raise_for_status() 
+        print(f"✅ [GNN] Tạo mới (POST): {grid_point['id']} -> {payload['forecastedPM25']['value']}")
+        
+    except Exception:
+        # Nếu POST lỗi (do đã tồn tại), chuyển sang PATCH
+        try:
+            patch_payload = { 
+                "forecastedPM25": payload["forecastedPM25"], 
+                "validFrom": payload["validFrom"] 
+            }
+            # PATCH endpoint: /entities/{id}/attrs
+            patch_url = f"{orion_url}/{entity_id}/attrs"
+            patch_headers = {'Content-Type': 'application/json'}
+            
+            resp_patch = requests.patch(patch_url, headers=patch_headers, data=json.dumps(patch_payload))
+            resp_patch.raise_for_status()
+            
+            print(f"🔄 [GNN] Cập nhật (PATCH): {grid_point['id']} -> {payload['forecastedPM25']['value']}")
+        except Exception as e:
+            print(f"❌ Lỗi Sync {grid_point['id']}: {e}")
 
 def main():
     engine, orion_url = get_db_engine()
-    print(f"\n--- BẮT ĐẦU DỰ BÁO GNN (Mạng Đồ Thị) ---")
+    print(f"\n--- BẮT ĐẦU DỰ BÁO GNN (Fixed Sync) ---")
 
     try:
-        # 1. Load Model & Graph Structure
         model = ST_GNN(num_nodes=NUM_NODES, input_dim=1, hidden_dim=16, output_dim=1)
         model.load_state_dict(torch.load(os.path.join(BASE_DIR, 'gnn_model.pth')))
         model.eval()
@@ -99,31 +110,21 @@ def main():
         scaler = joblib.load(os.path.join(BASE_DIR, 'gnn_scaler.joblib'))
         edge_index, edge_weight = torch.load(os.path.join(BASE_DIR, 'graph_structure.pt'))
 
-        # 2. Lấy dữ liệu mạng lưới
         raw_data, last_time = get_latest_network_data(engine)
         
-        # 3. Chuẩn hóa (Cực quan trọng: Phải reshape để scale đúng cột)
-        # Scaler học trên DataFrame (cột = trạm), nên ta phải đưa về dạng (Time, Nodes)
-        # raw_data đang là (Nodes, Time, 1) -> (Time, Nodes)
         input_2d = raw_data.squeeze().T 
         input_scaled = scaler.transform(input_2d)
-        
-        # Reshape lại về Tensor cho GNN (Nodes, Time, Features)
         input_tensor = torch.tensor(input_scaled.T[..., np.newaxis], dtype=torch.float)
 
-        # 4. Dự báo (Forward Pass)
         with torch.no_grad():
-            out = model(input_tensor, edge_index, edge_weight) # Shape: [9, 1]
+            out = model(input_tensor, edge_index, edge_weight)
             
-        # 5. Giải mã (Inverse Transform)
-        # Output model là (Nodes, 1) -> Cần đưa về (1, Nodes) để inverse_transform
-        pred_dummy = np.zeros((1, NUM_NODES)) # Dummy array khớp với shape scaler
+        pred_dummy = np.zeros((1, NUM_NODES))
         pred_dummy[0] = out.squeeze().numpy()
         pred_actual = scaler.inverse_transform(pred_dummy)[0]
 
-        # 6. Đẩy kết quả lên Orion
         for i, val in enumerate(pred_actual):
-            val = max(0.0, val) # Kẹp giá trị dương
+            val = max(0.0, val)
             sync_to_orion(orion_url, HCMC_GRID[i], val, last_time)
 
     except Exception as e:
