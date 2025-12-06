@@ -54,14 +54,9 @@ Phần mềm được đội ngũ tác giả của **UMT.FreeFireFiles** open so
 
 ---
 
-## 🏗️ 2. Tổng quan hệ thống
+## 2. Tổng quan hệ thống
 
 Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo tính mở rộng và linh hoạt.
-
-
-
-[Image of microservices architecture diagram]
-
 
 * **Core:** [FIWARE Orion-LD Context Broker](https://github.com/FIWARE/context.Orion-LD) (Quản lý ngữ cảnh & Dữ liệu liên kết).
 * **Backend (NestJS):**
@@ -78,7 +73,7 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ---
 
-## 🚀 3. Chức năng
+##  3. Chức năng
 
 ### 📱 A. Ứng dụng Công dân (Mobile App)
 
@@ -100,7 +95,7 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ---
 
-## 🖼️ 4. Screens Flow của dự án
+## 4. Kiến trúc của dự án
 
 ### Mobile App
 | Trang chủ (Heatmap) | Tìm đường & Dẫn đường | Báo cáo Sự cố | Thành tích & Hồ sơ |
@@ -114,31 +109,41 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ---
 
-## 🛠️ 5. Hướng dẫn cài đặt
+## 5. Hướng dẫn cài đặt
 
-### 5.1. 📋 Yêu cầu - Prerequisites
+### 5.1. Yêu cầu - Prerequisites
 * Docker & Docker Compose
 * Node.js 18+
 * Python 3.10+
 * Flutter SDK
 
-### 5.2. 🔥 Dựng APIs (Backend)
+### 5.2. Dựng APIs (Backend)
 
 Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ hạ tầng Backend chỉ với 1 lệnh.
 
-1.  **Clone repository:**
+1.  **Lấy Key API các nền tảng cần thiết**
+
+
+
+2.  **Clone repository:**
     ```bash
-    git clone [https://github.com/tannguyen1129/green-aqi-navigator.git](https://github.com/tannguyen1129/green-aqi-navigator.git)
+    git clone https://github.com/tannguyen1129/green-aqi-navigator.git green-aqi-navigator
     cd green-aqi-navigator
     ```
-2.  **Cấu hình biến môi trường:** Copy `.env.example` thành `.env` và điền API Key.
-3.  **Khởi chạy hệ thống:**
+3.  **Cấu hình biến môi trường:** Copy `.env.example` thành `.env` và điền API Key.
+4.  **Khởi chạy hệ thống:**
+    
+    *Lệnh này sẽ khởi động: MongoDB, Orion-LD*
+    ```bash
+    docker-compose -f docker-compose.fiware.yml up -d
+    ```
+
+    *Lệnh này sẽ khởi động: PostgreSQL, API Gateway, Microservices*
     ```bash
     docker compose up --build -d
     ```
-    *Lệnh này sẽ khởi động: PostgreSQL, MongoDB, Orion-LD, API Gateway, Microservices, Web Admin.*
 
-### 5.3. 🔨 Cài đặt Client (Mobile)
+### 5.3. Cài đặt frontend cho Citizen (Mobile)
 
 1.  Vào thư mục Frontend: `cd apps/frontend`
 2.  Cấu hình IP (Nếu chạy máy thật): Sửa `lib/core/api/api_client.dart`.
@@ -150,7 +155,116 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 
 ---
 
-## 🤝 6. Đóng góp
+## 6. Quản lý Người dùng & Phân quyền (User & Roles)
+
+Hệ thống đã được thiết lập sẵn mô hình **Role-Based Access Control (RBAC)** với 3 cấp độ người dùng. Dưới đây là thông tin đăng nhập mặc định để Ban giám khảo kiểm thử.
+
+### 📋 Danh sách Tài khoản Mặc định (Default Credentials)
+
+| Vai trò (Role) | Email | Mật khẩu | Nền tảng truy cập | Quyền hạn |
+| :--- | :--- | :--- | :--- | :--- |
+| **Công dân (Citizen)** | `user@gmail.com` | `Password123` | **Mobile App** | Xem bản đồ, Tìm đường xanh, Báo cáo sự cố, Tích điểm. |
+| **Cán bộ (Gov Official)** | `gov@green.aqi` | `Password123` | **Web Dashboard** | Xem bản đồ giám sát, Duyệt/Từ chối sự cố, Phân tích dữ liệu. |
+| **Quản trị viên (Admin)** | `admin@green.aqi`| `Password123` | **Web Dashboard** | Quản trị hệ thống, Quản lý người dùng, Cấu hình tham số. |
+
+---
+
+### ⚙️ Hướng dẫn Khởi tạo lại Dữ liệu (Database Seeding)
+
+Trong trường hợp triển khai mới (Clean Deploy) hoặc Database bị xóa, hãy thực hiện các bước sau để tái tạo lại bộ tài khoản chuẩn và cấu trúc bảng.
+
+# Bước 1: Cập nhật Database thủ công (Quan trọng nhất)
+
+Chúng ta sẽ bơm đầy đủ **Cột (Columns)** và **Quyền (Roles)** vào Database để đảm bảo hệ thống không bị lỗi khi lưu dữ liệu.
+
+---
+
+## 1.1 Truy cập vào PostgreSQL trong Docker
+
+Chạy lệnh sau:
+
+```bash
+sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db
+```
+
+## 1.2. Thêm roles và các cột còn thiếu (nếu có)
+
+```bash
+-- 1. Tạo bảng roles và thêm dữ liệu nếu chưa có
+CREATE TABLE IF NOT EXISTS roles (
+  role_id SERIAL PRIMARY KEY,
+  role_name VARCHAR(50) UNIQUE NOT NULL
+);
+
+INSERT INTO roles (role_name) VALUES 
+('citizen'), 
+('admin'), 
+('government_official')
+ON CONFLICT (role_name) DO NOTHING;
+
+-- 2. Thêm các cột còn thiếu vào bảng Users (Quan trọng cho Admin/Gov)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_department VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS health_group VARCHAR(50) DEFAULT 'normal';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS green_points INTEGER DEFAULT 0;
+
+-- 3. Đảm bảo bảng user_roles tồn tại
+CREATE TABLE IF NOT EXISTS user_roles (
+  user_id uuid REFERENCES users(user_id) ON DELETE CASCADE,
+  role_id integer REFERENCES roles(role_id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, role_id)
+);
+```
+
+#### Bước 2: Đăng ký 3 tài khoản qua API
+Chạy lệnh sau trên Terminal (VPS hoặc Localhost):
+
+```bash
+# 1. Tạo Admin
+curl -X POST http://localhost:3003/auth/register \
+-H 'Content-Type: application/json' \
+-d '{"email":"admin@green.aqi", "password":"Password123", "fullName":"Super Admin", "phoneNumber":"0909000001", "agencyDepartment":"System Admin"}'
+
+# 2. Tạo Cán bộ (Gov)
+curl -X POST http://localhost:3003/auth/register \
+-H 'Content-Type: application/json' \
+-d '{"email":"gov@green.aqi", "password":"Password123", "fullName":"Can Bo Moi Truong", "phoneNumber":"0909000002", "agencyDepartment":"So TNMT"}'
+
+# 3. Tạo Công dân (User)
+curl -X POST http://localhost:3003/auth/register \
+-H 'Content-Type: application/json' \
+-d '{"email":"user@gmail.com", "password":"Password123", "fullName":"Nguyen Van Dan", "phoneNumber":"0909000003"}'
+```
+
+#### Bước 3: Cấp quyền (Promote Roles) & Bổ sung cấu trúc bảng
+
+```bash
+-- A. Bổ sung các cột dữ liệu (Nếu thiếu)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_department VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS health_group VARCHAR(50) DEFAULT 'normal';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS green_points INTEGER DEFAULT 0;
+
+-- B. Tạo Roles
+INSERT INTO roles (role_name) VALUES ('citizen'), ('admin'), ('government_official') ON CONFLICT DO NOTHING;
+
+-- C. Thăng cấp cho Admin
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.user_id, r.role_id FROM users u, roles r
+WHERE u.email = 'admin@green.aqi' AND r.role_name = 'admin'
+ON CONFLICT DO NOTHING;
+
+-- D. Thăng cấp cho Cán bộ
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.user_id, r.role_id FROM users u, roles r
+WHERE u.email = 'gov@green.aqi' AND r.role_name = 'government_official'
+ON CONFLICT DO NOTHING;
+
+-- E. Dọn dẹp quyền thừa (Xóa quyền citizen mặc định của Admin/Gov)
+DELETE FROM user_roles
+WHERE role_id = (SELECT role_id FROM roles WHERE role_name = 'citizen')
+AND user_id IN (SELECT user_id FROM users WHERE email IN ('admin@green.aqi', 'gov@green.aqi'));
+```
+
+## 7. Đóng góp
 Dự án tuân thủ tinh thần nguồn mở. Mọi đóng góp (Pull Request) đều được hoan nghênh.
 1.  Fork dự án.
 2.  Tạo nhánh (`git checkout -b feature/AmazingFeature`).
@@ -160,9 +274,9 @@ Dự án tuân thủ tinh thần nguồn mở. Mọi đóng góp (Pull Request) 
 
 ---
 
-## 📞 7. Liên lạc
+## 8. Liên lạc
 
-**Team UMT.FreeFireFiles** - Đại học Quản lý và Công nghệ TP.HCM (UMT)
+**Team UMT.FreeFireFiles** - Đại học Quản lý và Công nghệ Thành phố Hồ Chí Minh
 
 * **Lead Developer:** Sơn Tân
 * **Email:** tannguyen1129@gmail.com
@@ -170,6 +284,6 @@ Dự án tuân thủ tinh thần nguồn mở. Mọi đóng góp (Pull Request) 
 
 ---
 
-## 8. License (Giấy phép)
+## 9. License (Giấy phép)
 
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.
