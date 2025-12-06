@@ -1,11 +1,14 @@
 version: '3.8'
 
 services:
-  # 1. CƠ SỞ DỮ LIỆU
+  # ==========================================
+  # 1. HẠ TẦNG RIÊNG (POSTGRES ONLY)
+  # ==========================================
+  # (Mongo & Orion đã chạy ở file khác, chung mạng green-net)
+  
   postgres-db:
     image: postgis/postgis:15-3.3
     container_name: green-aqi-postgres
-    # 🚀 FIX: Load trực tiếp file .env
     env_file:
       - .env
     environment:
@@ -19,38 +22,14 @@ services:
     networks:
       - green-net
 
-  mongo-db:
-    image: mongo:4.4
-    container_name: green-aqi-mongo
-    command: --nojournal
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - green-net
-
-  orion-broker:
-    image: fiware/orion-ld
-    container_name: green-aqi-orion
-    ports:
-      - "1026:1026"
-    depends_on:
-      - mongo-db
-    command: -dbhost mongo-db -logLevel DEBUG
-    networks:
-      - green-net
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
+  # ==========================================
   # 2. BACKEND MICROSERVICES
+  # ==========================================
   
   api-gateway:
     build: .
     container_name: green-aqi-gateway
     command: node dist/apps/api-gateway/main
-    env_file:
-      - .env
     ports:
       - "3000:3000"
     environment:
@@ -69,10 +48,13 @@ services:
     build: .
     container_name: green-aqi-auth
     command: node dist/apps/auth-service/main
-    env_file:
-      - .env
     environment:
       - DB_HOST=postgres-db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+      - JWT_SECRET=${JWT_SECRET}
       - USER_SERVICE_URL=http://user-data-service:3001
       - PORT=3003
     depends_on:
@@ -84,16 +66,18 @@ services:
     build: .
     container_name: green-aqi-user
     command: node dist/apps/user-data-service/main
-    env_file:
-      - .env
     environment:
       - DB_HOST=postgres-db
-      - ORION_LD_URL=http://orion-broker:1026/ngsi-ld/v1/entities
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+      # Dùng tên container của Orion đang chạy (green-aqi-orion)
+      - ORION_LD_URL=http://green-aqi-orion:1026/ngsi-ld/v1/entities
       - API_GATEWAY_PUBLIC_URL=http://notification-service:3004/api 
       - PORT=3001
     depends_on:
       - postgres-db
-      - orion-broker
+      # BỎ depends_on orion-broker vì nó không nằm trong file này
     networks:
       - green-net
 
@@ -101,18 +85,21 @@ services:
     build: .
     container_name: green-aqi-service
     command: node dist/apps/aqi-service/main
-    env_file:
-      - .env
     ports:
       - "3002:3002"
     environment:
       - DB_HOST=postgres-db
-      - ORION_LD_URL=http://orion-broker:1026/ngsi-ld/v1/entities
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+      # Dùng tên container của Orion đang chạy
+      - ORION_LD_URL=http://green-aqi-orion:1026/ngsi-ld/v1/entities
+      - OWM_API_KEY=${OWM_API_KEY}
+      - ORS_API_KEY=${ORS_API_KEY}
       - PORT_AQI=3002
       - AQI_SERVICE_PUBLIC_URL=http://localhost:3002
     depends_on:
       - postgres-db
-      - orion-broker
     volumes:
       - ./uploads:/app/uploads
     networks:
@@ -122,8 +109,6 @@ services:
     build: .
     container_name: green-aqi-notification
     command: node dist/apps/notification-service/main
-    env_file:
-      - .env
     environment:
       - PORT=3004
     volumes:
@@ -131,10 +116,12 @@ services:
     networks:
       - green-net
 
+# ==========================================
+# MẠNG (EXTERNAL)
+# ==========================================
 networks:
   green-net:
-    driver: bridge
+    external: true # 👈 QUAN TRỌNG: Sử dụng mạng đã tạo bởi file docker-compose của Orion
 
 volumes:
   postgres_data:
-  mongo_data:
