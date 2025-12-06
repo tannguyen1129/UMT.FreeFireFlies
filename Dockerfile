@@ -13,8 +13,11 @@ RUN npm ci
 COPY . .
 
 # Build toàn bộ dự án (tất cả các apps)
-# Lệnh này sẽ tạo ra thư mục dist/apps/api-gateway, dist/apps/auth-service...
-RUN npm run build
+RUN npx nest build api-gateway
+RUN npx nest build auth-service
+RUN npx nest build user-data-service
+RUN npx nest build aqi-service
+RUN npx nest build notification-service
 
 # --- Giai đoạn 2: Production Run ---
 FROM node:20-alpine
