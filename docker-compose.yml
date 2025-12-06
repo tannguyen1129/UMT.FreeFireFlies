@@ -121,7 +121,8 @@ services:
 # ==========================================
 networks:
   green-net:
-    external: true # 👈 QUAN TRỌNG: Sử dụng mạng đã tạo bởi file docker-compose của Orion
+    name: green-net
+    driver: bridge
 
 volumes:
   postgres_data:

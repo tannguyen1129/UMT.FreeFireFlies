@@ -164,7 +164,7 @@ Dự án tuân thủ tinh thần nguồn mở. Mọi đóng góp (Pull Request) 
 
 **Team UMT.FreeFireFiles** - Đại học Quản lý và Công nghệ TP.HCM (UMT)
 
-* **Lead Developer:** Nguyễn Nhật Tân
+* **Lead Developer:** Sơn Tân
 * **Email:** tannguyen1129@gmail.com
 * **Repository:** [Github Link](https://github.com/tannguyen1129/green-aqi-navigator)
 
