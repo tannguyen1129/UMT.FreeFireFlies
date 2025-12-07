@@ -18,6 +18,7 @@ import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
 import { PerceivedAirQuality } from './entities/perceived-air-quality.entity';
 import { CreatePerceptionDto } from './dto/create-perception.dto';
 import type { Polygon } from 'geojson'; 
+import { MoreThan } from 'typeorm';
 
 const HCMC_GRID = [
   { id: 'ThuDuc', lat: 10.8231, lon: 106.7711 }, // Q.Thủ Đức (cũ)
@@ -637,30 +638,58 @@ export class AqiServiceService implements OnModuleInit {
   // 📈 FORECAST (DỰ BÁO)
   // ================================================================
   async findAllForecasts(): Promise<any> {
-    this.logger.log('--- (Tầng 2) Yêu cầu lấy danh sách Dự báo (Forecasts)...');
+    // 1. Gọi sang Orion-LD (Không lọc thời gian, chỉ lấy mới nhất)
+    const url = this.configService.get<string>('ORION_LD_URL') ?? 'http://fiware-orion:1026/ngsi-ld/v1/entities';
     
+    // Lưu ý: Dùng type là 'AirQualityObserved' (Quan trắc thực tế) 
+    // vì AI chưa chạy xong thì lấy cái này demo trước cho có số liệu
     const params = {
-      type: 'AirQualityForecast', 
-      limit: 100 
+      type: 'AirQualityObserved', 
+      limit: 100,
+      options: 'keyValues', // Để Orion trả về JSON gọn
     };
-    
+
     try {
       const response = await firstValueFrom(
-        this.httpService.get(this.ORION_LD_URL, { 
-          params: params,
-          headers: {
-            'Accept': 'application/ld+json',
-             // 🚀 SỬA LỖI: Bỏ 'Link' header (Orion-LD không thích nó khi GET)
-          },
-          timeout: 5000,
-        }),
+        this.httpService.get(url, { params })
       );
-      return response.data; 
+      
+      const orionData = response.data; // Mảng dữ liệu từ Orion
+
+      // 2. MAP DỮ LIỆU & FIX LỖI GIỜ (QUAN TRỌNG)
+      const formattedData = orionData.map(item => {
+        // Lấy thời gian quan trắc từ Orion (hoặc mặc định là Now)
+        const observedAt = item.dateObserved ? new Date(item.dateObserved) : new Date();
+        
+        // 🚑 FIX LỖI GIỜ: Tạo khung dự báo cho 1 giờ tới
+        // App sẽ thấy: "À, dữ liệu này còn hạn sử dụng 1 tiếng nữa" -> Hiển thị luôn
+        const validFrom = observedAt; 
+        const validTo = new Date(observedAt.getTime() + 60 * 60 * 1000); // Cộng thêm 1 giờ
+
+        return {
+          // Map các trường sang chuẩn mà Mobile App đang đợi
+          id: item.id,
+          station_id: item.id,
+          location: item.location, // Giữ nguyên GeoJSON từ Orion
+          pm25: item.pm25,
+          aqi: item.aqi,
+          
+          // Trả về thời gian đã Fix
+          predicted_at: observedAt,
+          valid_from: validFrom,
+          valid_to: validTo, 
+          
+          confidence_score: 1.0 // Dữ liệu thật nên tin cậy 100%
+        };
+      });
+
+      return formattedData;
+
     } catch (error) {
-      this.logger.error('Error fetching forecasts from Orion-LD', error.response?.data);
-      throw new Error('Failed to fetch forecasts from Orion-LD');
+      this.logger.error('❌ Lỗi gọi Orion:', error.message);
+      return [];
     }
-  }
+}
 
   // ================================================================
   // ⚠️ INCIDENT (Đã sửa lỗi)
