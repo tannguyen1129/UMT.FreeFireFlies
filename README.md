@@ -175,17 +175,20 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 
 2.  **Clone repository:**
     ```bash
-    git clone https://github.com/tannguyen1129/green-aqi-navigator.git green-aqi-navigator
+    git clone https://github.com/tannguyen1129/UMT.FreeFireFlies.git green-aqi-navigator
     cd green-aqi-navigator
     ```
 3.  **Cấu hình biến môi trường:** Copy `.env.example` thành `.env` và điền API Key.
 4.  **Khởi chạy hệ thống:**
 
-docker network create green-net
+    *Tạo green net work*
+    ```bash
+    docker network create green-net
+    ```
     
     *Lệnh này sẽ khởi động: MongoDB, Orion-LD*
     ```bash
-    docker-compose -f docker-compose.fiware.yml up -d
+    docker compose -f docker-compose.fiware.yml up -d
     ```
 
     *Lệnh này sẽ khởi động: PostgreSQL, API Gateway, Microservices*
@@ -349,3 +352,43 @@ Dự án tuân thủ tinh thần nguồn mở. Mọi đóng góp (Pull Request) 
 ## 9. License (Giấy phép)
 
 Distributed under the Apache 2.0 License. See `LICENSE` for more information.
+
+## 10. Phụ lục
+
+### Hướng dẫn lấy Firebase Admin SDK Key (Service Account)
+
+Tài liệu này hướng dẫn cách lấy file `json` xác thực từ Google Firebase để Backend (Notification Service) có thể gửi thông báo.
+
+#### Bước 1: Truy cập Firebase Console
+1. Truy cập vào [Firebase Console](https://console.firebase.google.com/).
+2. Chọn dự án **Green AQI** (hoặc dự án bạn đang làm việc).
+
+#### Bước 2: Vào phần Cài đặt dự án (Project Settings)
+1. Nhìn sang menu bên trái, bấm vào biểu tượng **Bánh răng (Settings)** ⚙️ bên cạnh dòng chữ "Project Overview".
+2. Chọn **Project settings** (Cài đặt dự án).
+
+#### Bước 3: Tạo khóa bí mật (Service Account)
+1. Trên thanh menu ngang phía trên, chọn tab **Service accounts** (Tài khoản dịch vụ).
+2. Ở phần **Firebase Admin SDK**, hãy chắc chắn rằng tùy chọn **Node.js** đang được chọn.
+3. Bấm vào nút màu xanh **Generate new private key** (Tạo khóa riêng tư mới).
+
+![Generate Key](https://files.gitbook.com/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F-L9iS6Qm2yE1ngeb1aL-%2Fuploads%2Fgit-blob-10cc677059102434e300d81096752077e6417734%2Ffirebase-service-account.png?alt=media)
+
+4. Một cửa sổ cảnh báo hiện ra, bấm **Generate key** để xác nhận.
+5. Một file có đuôi `.json` sẽ tự động được tải xuống máy tính của bạn.
+
+---
+
+#### Bước 4: Cấu hình vào dự án (Quan trọng)
+
+Theo cấu hình `docker-compose.yml` hiện tại của dự án, bạn cần thực hiện đổi tên và di chuyển file này đúng chỗ:
+
+##### 1. Đổi tên file
+File vừa tải về thường có tên dài (ví dụ: `project-name-firebase-adminsdk-xyz.json`).
+👉 Hãy đổi tên nó thành: **`firebase-admin-key.json`**
+
+##### 2. Di chuyển vào thư mục dự án
+Di chuyển file `firebase-admin-key.json` vào đường dẫn sau trong source code của bạn:
+
+```text
+apps/notification-service/firebase-admin-key.json
