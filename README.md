@@ -97,6 +97,8 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ## 4. Kiến trúc của dự án
 
+![Kiến trúc phần mềm nguồn mở](doc/Kien-truc-pmnm.png)
+
 ---
 
 ## 5. Hướng dẫn cài đặt
@@ -114,15 +116,21 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 1.  **Lấy Key API các nền tảng cần thiết**
 
     *Lấy key của openrouteservice API*
+
     Bước 1: Vào website: https://api.openrouteservice.org/
+
     Bước 2: Chọn Sign up. Sau đó đăng ký tài khoản và kích hoạt tài khoản ở email hoặc sign up với email
+
     Bước 3: Đăng nhập bằng tài khoản mới tạo. Vừa đăng nhập bạn sẽ thấy chỗ lấy API Key
 
     ![Lấy key tại đây](doc/open_route.png)
 
     *Lấy key của openrouteservice API*
+
     Bước 1: Vào website tại địa chỉ: https://home.openweathermap.org/users/sign_up để tạo tài khoản
+
     Bước 2: Đăng ký thành công và quay lại đăng nhập. Chọn tên tài khoản gốc trên bên phải sau đó chọn "My API Keys"
+    
     Bước 3: Copy API key có sẵn hoặc tự tạo mới bằng nút "Generate" phía bên phải
 
     ![Lấy API Key tại đây](doc/owm.png)
@@ -134,6 +142,8 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
     ```
 3.  **Cấu hình biến môi trường:** Copy `.env.example` thành `.env` và điền API Key.
 4.  **Khởi chạy hệ thống:**
+
+docker network create green-net
     
     *Lệnh này sẽ khởi động: MongoDB, Orion-LD*
     ```bash
@@ -187,7 +197,7 @@ Chúng ta sẽ bơm đầy đủ **Cột (Columns)** và **Quyền (Roles)** và
 
 ---
 
-## 1.1 Truy cập vào PostgreSQL trong Docker
+##### 1.1 Truy cập vào PostgreSQL trong Docker
 
 Chạy lệnh sau:
 
@@ -195,7 +205,7 @@ Chạy lệnh sau:
 sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db
 ```
 
-## 1.2. Thêm roles và các cột còn thiếu (nếu có)
+##### 1.2. Thêm roles và các cột còn thiếu (nếu có)
 
 ```bash
 -- 1. Tạo bảng roles và thêm dữ liệu nếu chưa có
@@ -245,14 +255,17 @@ curl -X POST http://localhost:3003/auth/register \
 
 #### Bước 3: Cấp quyền (Promote Roles) & Bổ sung cấu trúc bảng
 
+Chạy lại lệnh sau:
+
+```bash
+sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db
+```
+
 ```bash
 -- A. Bổ sung các cột dữ liệu (Nếu thiếu)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_department VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS health_group VARCHAR(50) DEFAULT 'normal';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS green_points INTEGER DEFAULT 0;
-
--- B. Tạo Roles
-INSERT INTO roles (role_name) VALUES ('citizen'), ('admin'), ('government_official') ON CONFLICT DO NOTHING;
 
 -- C. Thăng cấp cho Admin
 INSERT INTO user_roles (user_id, role_id)
