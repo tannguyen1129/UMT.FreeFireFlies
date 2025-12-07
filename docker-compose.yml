@@ -71,8 +71,7 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
       - DB_NAME=${DB_NAME}
-      # Dùng tên container của Orion đang chạy (green-aqi-orion)
-      - ORION_LD_URL=http://green-aqi-orion:1026/ngsi-ld/v1/entities
+      - ORION_LD_URL=http://fiware-orion:1026/ngsi-ld/v1/entities
       - API_GATEWAY_PUBLIC_URL=http://notification-service:3004/api 
       - PORT=3001
     depends_on:
@@ -92,8 +91,9 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
       - DB_NAME=${DB_NAME}
-      # Dùng tên container của Orion đang chạy
-      - ORION_LD_URL=http://green-aqi-orion:1026/ngsi-ld/v1/entities
+      - ORION_LD_URL=http://fiware-orion:1026/ngsi-ld/v1/entities
+      - ORION_HOST=fiware-orion
+      - ORION_PORT=1026
       - OWM_API_KEY=${OWM_API_KEY}
       - ORS_API_KEY=${ORS_API_KEY}
       - PORT_AQI=3002
@@ -116,13 +116,27 @@ services:
     networks:
       - green-net
 
+  ai-service:
+    build: ./apps/ai  # Đường dẫn đến thư mục chứa Dockerfile vừa tạo
+    container_name: green-aqi-ai
+    environment:
+      - DB_HOST=postgres-db 
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+    depends_on:
+      - postgres-db
+    networks:
+      - green-net
+
 # ==========================================
 # MẠNG (EXTERNAL)
 # ==========================================
 networks:
   green-net:
+    external: true
     name: green-net
-    driver: bridge
 
 volumes:
   postgres_data:

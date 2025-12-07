@@ -75,7 +75,7 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ##  3. Chức năng
 
-### 📱 A. Ứng dụng Công dân (Mobile App)
+### A. Ứng dụng Công dân (Mobile App)
 
 | Tính năng | Mô tả & Công nghệ |
 | :--- | :--- |
@@ -87,7 +87,7 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 | **🏥 Trợ lý Sức khỏe** | Cảnh báo cá nhân hóa dựa trên hồ sơ bệnh lý (Người già, Hen suyễn...). |
 | **🏆 Gamification** | Tích "Điểm Xanh" khi hoàn thành lộ trình sạch. Bảng xếp hạng thi đua. |
 
-### 💻 B. Web Dashboard (Quản lý)
+### B. Web Dashboard (Quản lý)
 
 * **Trung tâm Giám sát (Monitoring Map):** Cái nhìn toàn cảnh (God-mode) với các lớp dữ liệu: Trạm quan trắc, Sự cố, Cảm nhận dân sinh.
 * **Phân tích Dữ liệu (Analytics):** Biểu đồ xu hướng AQI, Tương quan giữa Mật độ giao thông và Ô nhiễm (Data-driven insights).
@@ -96,16 +96,6 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 ---
 
 ## 4. Kiến trúc của dự án
-
-### Mobile App
-| Trang chủ (Heatmap) | Tìm đường & Dẫn đường | Báo cáo Sự cố | Thành tích & Hồ sơ |
-| :---: | :---: | :---: | :---: |
-| <img src="LINK_ANH_HOME_SCREEN" width="200" /> | <img src="LINK_ANH_NAVIGATION" width="200" /> | <img src="LINK_ANH_REPORT" width="200" /> | <img src="LINK_ANH_PROFILE" width="200" /> |
-
-### Web Dashboard
-<div align="center">
-  <img src="LINK_ANH_WEB_DASHBOARD" width="800" />
-</div>
 
 ---
 
@@ -119,11 +109,23 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ### 5.2. Dựng APIs (Backend)
 
-Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ hạ tầng Backend chỉ với 1 lệnh.
+Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ hạ tầng Backend một cách dễ dàng
 
 1.  **Lấy Key API các nền tảng cần thiết**
 
+    *Lấy key của openrouteservice API*
+    Bước 1: Vào website: https://api.openrouteservice.org/
+    Bước 2: Chọn Sign up. Sau đó đăng ký tài khoản và kích hoạt tài khoản ở email hoặc sign up với email
+    Bước 3: Đăng nhập bằng tài khoản mới tạo. Vừa đăng nhập bạn sẽ thấy chỗ lấy API Key
 
+    ![Lấy key tại đây](doc/open_route.png)
+
+    *Lấy key của openrouteservice API*
+    Bước 1: Vào website tại địa chỉ: https://home.openweathermap.org/users/sign_up để tạo tài khoản
+    Bước 2: Đăng ký thành công và quay lại đăng nhập. Chọn tên tài khoản gốc trên bên phải sau đó chọn "My API Keys"
+    Bước 3: Copy API key có sẵn hoặc tự tạo mới bằng nút "Generate" phía bên phải
+
+    ![Lấy API Key tại đây](doc/owm.png)
 
 2.  **Clone repository:**
     ```bash
@@ -145,12 +147,18 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 
 ### 5.3. Cài đặt frontend cho Citizen (Mobile)
 
-1.  Vào thư mục Frontend: `cd apps/frontend`
-2.  Cấu hình IP (Nếu chạy máy thật): Sửa `lib/core/api/api_client.dart`.
-3.  Chạy:
+1.  **Xem cài đặt Android Studio và Flutter tại đây**
+2.  **Clone repository:**
     ```bash
-    flutter pub get
-    flutter run
+    git clone https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git frontend_citizen
+    ```
+
+
+### 5.4. Cài đặt Web Admin/Goverment
+
+1.  **Clone repository:**
+    ```bash
+    git clone https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git frontend_citizen
     ```
 
 ---
@@ -173,7 +181,7 @@ Hệ thống đã được thiết lập sẵn mô hình **Role-Based Access Con
 
 Trong trường hợp triển khai mới (Clean Deploy) hoặc Database bị xóa, hãy thực hiện các bước sau để tái tạo lại bộ tài khoản chuẩn và cấu trúc bảng.
 
-# Bước 1: Cập nhật Database thủ công (Quan trọng nhất)
+#### Bước 1: Cập nhật Database thủ công (Quan trọng nhất)
 
 Chúng ta sẽ bơm đầy đủ **Cột (Columns)** và **Quyền (Roles)** vào Database để đảm bảo hệ thống không bị lỗi khi lưu dữ liệu.
 
@@ -279,7 +287,7 @@ Dự án tuân thủ tinh thần nguồn mở. Mọi đóng góp (Pull Request) 
 **Team UMT.FreeFireFiles** - Đại học Quản lý và Công nghệ Thành phố Hồ Chí Minh
 
 * **Lead Developer:** Sơn Tân
-* **Email:** tannguyen1129@gmail.com
+* **Email:** tandtnt15@gmail.com
 * **Repository:** [Github Link](https://github.com/tannguyen1129/green-aqi-navigator)
 
 ---
