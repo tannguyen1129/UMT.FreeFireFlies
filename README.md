@@ -10,11 +10,11 @@
 
 <div align="center">
 
-  <a href="https://github.com/tannguyen1129/umtnewmountain/issues/new?assignees=&labels=bug&projects=&template=bug_report.md&title=%5BBug%5D%3A+%3CM%C3%B4+t%E1%BA%A3+ng%E1%BA%AFn+g%E1%BB%8Dn+v%E1%BB%81+l%E1%BB%97i%3E">
+  <a href="https://github.com/tannguyen1129/UMT.FreeFireFlies/issues/new?template=bao_cao_loi.md">
     <img src="https://img.shields.io/badge/🆘_Báo_cáo_Lỗi-(Bug_Report)-d9534f?style=for-the-badge" alt="Báo cáo lỗi" />
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/tannguyen1129/umtnewmountain/issues/new?assignees=&labels=enhancement&projects=&template=feature.md&title=Y%C3%AAu+c%E1%BA%A7u+t%C3%ADnh+n%C4%83ng%3A+%5BT%C3%AAn+t%C3%ADnh+n%C4%83ng%5D">
+  <a href="https://github.com/tannguyen1129/UMT.FreeFireFlies/issues/new?template=yeu_cau_tinh_nang.md">
     <img src="https://img.shields.io/badge/🧑‍🏫_Yêu_cầu_Tính_năng-(Feature_Request)-0275d8?style=for-the-badge" alt="Yêu cầu tính năng" />
   </a>
 
@@ -104,10 +104,48 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 ## 5. Hướng dẫn cài đặt
 
 ### 5.1. Yêu cầu - Prerequisites
-* Docker & Docker Compose
-* Node.js 18+
-* Python 3.10+
-* Flutter SDK
+#### 1. Cài đặt Docker và Docker compose
+
+Gỡ bản Docker cũ (nếu có)
+```bash
+sudo apt-get remove docker docker-engine docker.io containerd runc
+```
+
+Cài các package hỗ trợ
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+```
+
+Thêm GPG key
+```bash
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+```
+
+Thêm repo Docker
+```bash
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```
+
+Cài Docker Engine + Docker Compose plugin (v2)
+```bash
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+
+Kiểm tra version
+```bash
+docker --version
+docker compose version
+```
+
+
+
 
 ### 5.2. Dựng APIs (Backend)
 
@@ -168,9 +206,12 @@ docker network create green-net
 
 1.  **Clone repository:**
     ```bash
-    git clone https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git frontend_citizen
+    git clone https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git green-aqi-dashboard
     ```
-
+2.  **Chạy lệnh docker**
+```bash
+    docker compose up --build -d
+```
 ---
 
 ## 6. Quản lý Người dùng & Phân quyền (User & Roles)
