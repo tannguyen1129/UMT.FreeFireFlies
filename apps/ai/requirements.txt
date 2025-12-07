@@ -1,0 +1,13 @@
+torch
+torchvision
+torchaudio
+scikit-learn
+pandas
+numpy
+psycopg2-binary
+python-dotenv
+joblib
+sqlalchemy
+geopy
+torch-geometric
+schedule
