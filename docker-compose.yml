@@ -4,8 +4,6 @@ services:
   # ==========================================
   # 1. HẠ TẦNG RIÊNG (POSTGRES ONLY)
   # ==========================================
-  # (Mongo & Orion đã chạy ở file khác, chung mạng green-net)
-  
   postgres-db:
     image: postgis/postgis:15-3.3
     container_name: green-aqi-postgres
@@ -33,9 +31,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - AUTH_SERVICE_URL=http://auth-service:3003
-      - USER_SERVICE_URL=http://user-data-service:3001
-      - AQI_SERVICE_URL=http://aqi-service:3002
+      # --- SỬA: Dùng biến từ .env thay vì ghi cứng ---
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - USER_SERVICE_URL=${USER_SERVICE_URL}
+      - AQI_SERVICE_URL=${AQI_SERVICE_URL}
       - PORT=3000
     depends_on:
       - auth-service
@@ -48,6 +47,8 @@ services:
     build: .
     container_name: green-aqi-auth
     command: node dist/apps/auth-service/main
+    ports:
+      - "3003:3003"
     environment:
       - DB_HOST=postgres-db
       - DB_PORT=5432
@@ -55,8 +56,9 @@ services:
       - DB_PASS=${DB_PASS}
       - DB_NAME=${DB_NAME}
       - JWT_SECRET=${JWT_SECRET}
-      - USER_SERVICE_URL=http://user-data-service:3001
-      - PORT=3003
+      - USER_SERVICE_URL=${USER_SERVICE_URL}
+      - HOST=${HOST}  # Quan trọng: Để lắng nghe 0.0.0.0
+      - PORT_AUTH=3003
     depends_on:
       - postgres-db
     networks:
@@ -66,17 +68,22 @@ services:
     build: .
     container_name: green-aqi-user
     command: node dist/apps/user-data-service/main
+    # --- THÊM: Mở port để test nếu cần ---
+    ports: 
+      - "3001:3001"
     environment:
       - DB_HOST=postgres-db
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
       - DB_NAME=${DB_NAME}
-      - ORION_LD_URL=http://fiware-orion:1026/ngsi-ld/v1/entities
-      - API_GATEWAY_PUBLIC_URL=http://notification-service:3004/api 
+      - ORION_LD_URL=${ORION_LD_URL}
+      # --- SỬA: Thêm HOST để tránh lỗi Connection Refused ---
+      - HOST=${HOST} 
       - PORT=3001
+      # Gateway URL dùng cho Notification service gọi ngược lại
+      - API_GATEWAY_PUBLIC_URL=http://notification-service:3004/api 
     depends_on:
       - postgres-db
-      # BỎ depends_on orion-broker vì nó không nằm trong file này
     networks:
       - green-net
 
@@ -91,7 +98,7 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
       - DB_NAME=${DB_NAME}
-      - ORION_LD_URL=http://fiware-orion:1026/ngsi-ld/v1/entities
+      - ORION_LD_URL=${ORION_LD_URL}
       - ORION_HOST=fiware-orion
       - ORION_PORT=1026
       - OWM_API_KEY=${OWM_API_KEY}
@@ -117,7 +124,7 @@ services:
       - green-net
 
   ai-service:
-    build: ./apps/ai  # Đường dẫn đến thư mục chứa Dockerfile vừa tạo
+    build: ./apps/ai
     container_name: green-aqi-ai
     environment:
       - DB_HOST=postgres-db 

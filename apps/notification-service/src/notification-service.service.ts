@@ -4,15 +4,15 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import * as admin from 'firebase-admin';
 import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class NotificationServiceService implements OnModuleInit {
   private readonly logger = new Logger(NotificationServiceService.name);
-  
-  // URL của Orion-LD (Gọi localhost vì service này chạy trên Host)
-  private readonly ORION_URL = 'http://localhost:1026/ngsi-ld/v1/entities';
+   
+  // Hãy thay 'fiware-orion' bằng tên service của Orion trong file docker-compose.yml của bạn.
+  private readonly ORION_URL = 'http://fiware-orion:1026/ngsi-ld/v1/entities';
 
-  // Bộ nhớ đệm để tránh Spam (Cooldown 30 phút)
   private lastSentTime: Map<string, number> = new Map();
   private readonly COOLDOWN_MS = 30 * 60 * 1000; 
 
@@ -20,8 +20,10 @@ export class NotificationServiceService implements OnModuleInit {
 
   onModuleInit() {
     try {
-      // Đường dẫn tuyệt đối đến file key Firebase
-      const serviceAccountPath = '/root/open-source/green-aqi-navigator/apps/notification-service/firebase-admin-key.json';
+      // process.cwd() trong container thường là /app
+      const serviceAccountPath = path.join(process.cwd(), 'apps/notification-service/firebase-admin-key.json');
+
+      this.logger.log(`🔍 Đang tìm key tại: ${serviceAccountPath}`);
 
       if (!fs.existsSync(serviceAccountPath)) {
          throw new Error(`❌ File key KHÔNG TỒN TẠI tại: ${serviceAccountPath}`);
@@ -37,15 +39,15 @@ export class NotificationServiceService implements OnModuleInit {
         this.logger.log('✅ Firebase Admin Initialized successfully');
       }
     } catch (error) {
-      this.logger.error('❌ Lỗi khởi tạo Firebase:', error.message);
+      // Log stack để dễ debug hơn
+      this.logger.error('❌ Lỗi khởi tạo Firebase:', error);
     }
   }
 
-  // 🚀 CHẠY MỖI 1 PHÚT (POLLING)
   @Cron('*/1 * * * *') 
   async checkAirQualityAndNotify() {
     try {
-      // 1. Chủ động gọi Orion-LD để lấy TẤT CẢ dự báo
+      // Gọi Orion
       const response = await firstValueFrom(
         this.httpService.get(this.ORION_URL, {
           params: { type: 'AirQualityForecast', limit: 100 },
@@ -58,13 +60,19 @@ export class NotificationServiceService implements OnModuleInit {
 
       const entities = response.data; 
       if (Array.isArray(entities)) {
+        this.logger.log(`🔎 Tìm thấy ${entities.length} trạm dự báo.`);
         for (const entity of entities) {
           this.checkSingleStation(entity);
         }
       }
 
     } catch (error) {
-      this.logger.error('❌ Lỗi khi tuần tra:', error.message);
+      // SỬA LỖI LOGGING: In ra chi tiết lỗi thay vì chỉ "Error"
+      if (error.code === 'ECONNREFUSED') {
+        this.logger.error(`❌ Không thể kết nối tới Orion tại ${this.ORION_URL}. Hãy kiểm tra tên Service trong Docker Compose.`);
+      } else {
+        this.logger.error('❌ Lỗi khi tuần tra:', error.message || error);
+      }
     }
   }
 
@@ -75,20 +83,15 @@ export class NotificationServiceService implements OnModuleInit {
     
     if (!pm25 || !timeStr) return;
 
-    // Lấy tên khu vực từ ID
     const districtName = stationId.split(':').pop().replace('OWM-', '');
-
-    // Kiểm tra Cooldown (Chống spam)
     const lastTime = this.lastSentTime.get(districtName) || 0;
     const now = Date.now();
     
-    // Nếu chưa đủ 30 phút -> Bỏ qua
     if (now - lastTime < this.COOLDOWN_MS) return;
     
-    // Kiểm tra điều kiện (Ngưỡng > 40)
     if (pm25 > 40) {
       this.sendAlert(districtName, pm25, timeStr);
-      this.lastSentTime.set(districtName, now); // Cập nhật giờ gửi
+      this.lastSentTime.set(districtName, now); 
     }
   }
 
@@ -116,7 +119,7 @@ export class NotificationServiceService implements OnModuleInit {
 
       this.logger.log(`🚀 Đã bắn thông báo FCM thành công tới topic 'general_alerts'`);
     } catch (error) {
-      this.logger.error('❌ Lỗi khi bắn FCM:', error.message);
+      this.logger.error('❌ Lỗi khi bắn FCM:', error);
     }
   }
 
@@ -142,16 +145,14 @@ export class NotificationServiceService implements OnModuleInit {
         title: title,
         body: bodyMsg,
       },
-      topic: `user_${userId}`, // 👈 Gửi đúng vào topic của user này
+      topic: `user_${userId}`,
     };
 
     try {
       await admin.messaging().send(message);
       this.logger.log(`🚀 Đã gửi FCM tới user_${userId}: ${status}`);
     } catch (error) {
-      this.logger.error(`❌ Lỗi gửi FCM Incident:`, error.message);
+      this.logger.error(`❌ Lỗi gửi FCM Incident:`, error);
     }
   }
-
-
 }
