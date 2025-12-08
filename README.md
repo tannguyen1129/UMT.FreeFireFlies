@@ -99,9 +99,7 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ## 🏗 4. Kiến trúc của dự án
 
-\<div align="center"\>
-\<img src="doc/Kien-truc-pmnm.png" alt="Kiến trúc phần mềm nguồn mở" width="100%" /\>
-\</div\>
+![Kiến trúc PMNM](doc/Kien-truc-pmnm.png)
 
 -----
 
@@ -160,17 +158,13 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 
 #### 1\. Lấy Key API các nền tảng cần thiết
 
-\<details\>
-\<summary\>\<b\>🔑 Hướng dẫn lấy key OpenRouteService (Bấm để xem)\</b\>\</summary\>
+🔑 Hướng dẫn lấy key OpenRouteService
 
 1.  Vào website: [https://api.openrouteservice.org/](https://api.openrouteservice.org/)
 2.  Chọn **Sign up**. Sau đó đăng ký tài khoản và kích hoạt tài khoản ở email.
 3.  Đăng nhập bằng tài khoản mới tạo. Tại Dashboard bạn sẽ thấy chỗ lấy API Key.
 
-\</details\>
-
-\<details\>
-\<summary\>\<b\>🌦️ Hướng dẫn lấy key OpenWeatherMap (Bấm để xem)\</b\>\</summary\>
+🌦️ Hướng dẫn lấy key OpenWeatherMap
 
 1.  Vào website: [https://home.openweathermap.org/users/sign\_up](https://home.openweathermap.org/users/sign_up) để tạo tài khoản.
 2.  Đăng ký thành công và quay lại đăng nhập. Chọn tên tài khoản gốc trên bên phải sau đó chọn **"My API Keys"**.
@@ -181,8 +175,6 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 #### 2\. Clone repository
 
 ```bash
-git clone https://github.com/tannguyen1129/green-aqi-navigator.git green-aqi-navigator
-# Lưu ý: Kiểm tra lại URL repo thứ 2 nếu bạn cần clone cả 2 vào cùng thư mục
 git clone https://github.com/tannguyen1129/UMT.FreeFireFlies.git green-aqi-navigator 
 cd green-aqi-navigator
 ```
@@ -209,7 +201,7 @@ docker compose -f docker-compose.fiware.yml up -d
 *(Lệnh này sẽ khởi động phần còn lại của hệ thống)*
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 -----
@@ -230,8 +222,7 @@ Hệ thống sử dụng **RBAC** (Role-Based Access Control). Dưới đây là
 
 Nếu bạn xóa Database hoặc deploy mới, hãy chạy các lệnh sau để tạo tài khoản và phân quyền chuẩn.
 
-\<details\>
-\<summary\>\<b\>🛠️ Bấm để xem lệnh tạo tài khoản và phân quyền\</b\>\</summary\>
+🛠️ Bấm để xem lệnh tạo tài khoản và phân quyền
 
 **1. Đăng ký tài khoản qua API:**
 
@@ -258,8 +249,6 @@ INSERT INTO user_roles (user_id, role_id) SELECT u.user_id, r.role_id FROM users
 DELETE FROM user_roles WHERE role_id = (SELECT role_id FROM roles WHERE role_name = 'citizen') AND user_id IN (SELECT user_id FROM users WHERE email IN ('admin@green.aqi', 'gov@green.aqi'));
 "
 ```
-
-\</details\>
 
 -----
 
