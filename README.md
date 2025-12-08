@@ -144,8 +144,18 @@ docker --version
 docker compose version
 ```
 
+#### 2. Cài Node.js 20+ (khuyên dùng NodeSource)
 
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
 
+Kiểm tra version
+```bash
+node -v
+npm -v
+```
 
 ### 5.2. Dựng APIs (Backend)
 
@@ -196,16 +206,7 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
     docker compose up --build -d
     ```
 
-### 5.3. Cài đặt frontend cho Citizen (Mobile)
-
-1.  **Xem cài đặt Android Studio và Flutter tại đây**
-2.  **Clone repository:**
-    ```bash
-    git clone https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git frontend_citizen
-    ```
-
-
-### 5.4. Cài đặt Web Admin/Goverment
+### 5.3. Cài đặt Web Admin/Goverment
 
 1.  **Clone repository:**
     ```bash
@@ -215,6 +216,12 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 ```bash
     docker compose up --build -d
 ```
+
+Chạy thành công là có thể sử dụng Admin Dashboard
+
+### 5.4. Cài đặt frontend cho Citizen (Mobile)
+
+Xem hướng dẫn trong git clone https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git frontend_citizen
 ---
 
 ## 6. Quản lý Người dùng & Phân quyền (User & Roles)
@@ -235,49 +242,7 @@ Hệ thống đã được thiết lập sẵn mô hình **Role-Based Access Con
 
 Trong trường hợp triển khai mới (Clean Deploy) hoặc Database bị xóa, hãy thực hiện các bước sau để tái tạo lại bộ tài khoản chuẩn và cấu trúc bảng.
 
-#### Bước 1: Cập nhật Database thủ công (Quan trọng nhất)
-
-Chúng ta sẽ bơm đầy đủ **Cột (Columns)** và **Quyền (Roles)** vào Database để đảm bảo hệ thống không bị lỗi khi lưu dữ liệu.
-
----
-
-##### 1.1 Truy cập vào PostgreSQL trong Docker
-
-Chạy lệnh sau:
-
-```bash
-sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db
-```
-
-##### 1.2. Thêm roles và các cột còn thiếu (nếu có)
-
-```bash
--- 1. Tạo bảng roles và thêm dữ liệu nếu chưa có
-CREATE TABLE IF NOT EXISTS roles (
-  role_id SERIAL PRIMARY KEY,
-  role_name VARCHAR(50) UNIQUE NOT NULL
-);
-
-INSERT INTO roles (role_name) VALUES 
-('citizen'), 
-('admin'), 
-('government_official')
-ON CONFLICT (role_name) DO NOTHING;
-
--- 2. Thêm các cột còn thiếu vào bảng Users (Quan trọng cho Admin/Gov)
-ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_department VARCHAR(255);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS health_group VARCHAR(50) DEFAULT 'normal';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS green_points INTEGER DEFAULT 0;
-
--- 3. Đảm bảo bảng user_roles tồn tại
-CREATE TABLE IF NOT EXISTS user_roles (
-  user_id uuid REFERENCES users(user_id) ON DELETE CASCADE,
-  role_id integer REFERENCES roles(role_id) ON DELETE CASCADE,
-  PRIMARY KEY (user_id, role_id)
-);
-```
-
-#### Bước 2: Đăng ký 3 tài khoản qua API
+#### Bước 1: Đăng ký 3 tài khoản qua API
 Chạy lệnh sau trên Terminal (VPS hoặc Localhost):
 
 ```bash
@@ -297,7 +262,7 @@ curl -X POST http://localhost:3003/auth/register \
 -d '{"email":"user@gmail.com", "password":"Password123", "fullName":"Nguyen Van Dan", "phoneNumber":"0909000003"}'
 ```
 
-#### Bước 3: Cấp quyền (Promote Roles) & Bổ sung cấu trúc bảng
+#### Bước 2: Cấp quyền (Promote Roles) & Bổ sung cấu trúc bảng
 
 Chạy lại lệnh sau:
 
@@ -306,24 +271,19 @@ sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db
 ```
 
 ```bash
--- A. Bổ sung các cột dữ liệu (Nếu thiếu)
-ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_department VARCHAR(255);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS health_group VARCHAR(50) DEFAULT 'normal';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS green_points INTEGER DEFAULT 0;
-
--- C. Thăng cấp cho Admin
+-- A. Thăng cấp cho Admin
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id FROM users u, roles r
 WHERE u.email = 'admin@green.aqi' AND r.role_name = 'admin'
 ON CONFLICT DO NOTHING;
 
--- D. Thăng cấp cho Cán bộ
+-- B. Thăng cấp cho Cán bộ
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id FROM users u, roles r
 WHERE u.email = 'gov@green.aqi' AND r.role_name = 'government_official'
 ON CONFLICT DO NOTHING;
 
--- E. Dọn dẹp quyền thừa (Xóa quyền citizen mặc định của Admin/Gov)
+-- C. Dọn dẹp quyền thừa (Xóa quyền citizen mặc định của Admin/Gov)
 DELETE FROM user_roles
 WHERE role_id = (SELECT role_id FROM roles WHERE role_name = 'citizen')
 AND user_id IN (SELECT user_id FROM users WHERE email IN ('admin@green.aqi', 'gov@green.aqi'));
@@ -344,8 +304,12 @@ Dự án tuân thủ tinh thần nguồn mở. Mọi đóng góp (Pull Request) 
 **Team UMT.FreeFireFiles** - Đại học Quản lý và Công nghệ Thành phố Hồ Chí Minh
 
 * **Lead Developer:** Sơn Tân
+* **AI Engineer:** Võ Ngọc Trâm Anh
+* **Frontend Developer:** Phan Nguyễn Duy Kha
 * **Email:** tandtnt15@gmail.com
-* **Repository:** [Github Link](https://github.com/tannguyen1129/green-aqi-navigator)
+* **Repository Backend:** [Backend Repo](https://github.com/tannguyen1129/UMT.FreeFireFlies)
+* **Repository Frontend Citizen:** [Frontend Citizen Repo](https://github.com/tannguyen1129/UMT.FreeFireFiles-webdashboard.git)
+* **Repository Frontend Admin Dashboard:** [Frontend Admin/Gov Repo](https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git)
 
 ---
 
