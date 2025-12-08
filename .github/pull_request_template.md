@@ -19,8 +19,3 @@ Closes #
 - [ ] Tôi đã comment vào các phần code phức tạp (nếu có).
 - [ ] Tôi đã kiểm tra kỹ năng hiển thị trên Mobile/Desktop (nếu là Frontend/App).
 - [ ] Không có lỗi warning mới phát sinh trong terminal/console.
-
-## 📸 Hình ảnh / Video (Nếu có thay đổi giao diện)
-| Trước khi thay đổi | Sau khi thay đổi |
-| :---: | :---: |
-| *(Ảnh cũ)* | *(Ảnh mới)* |

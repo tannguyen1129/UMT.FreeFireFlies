@@ -1,0 +1,6 @@
+[submodule "web-dashboard"]
+	path = web-dashboard
+	url = https://github.com/tannguyen1129/UMT.FreeFireFiles-webdashboard.git
+[submodule "citizen-mobile"]
+	path = citizen-mobile
+	url = https://github.com/tannguyen1129/UMT.FreeFireFlies-frontend.git
