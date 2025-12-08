@@ -170,8 +170,6 @@ Chúng tôi cung cấp file `docker-compose.yml` để khởi chạy toàn bộ 
 2.  Đăng ký thành công và quay lại đăng nhập. Chọn tên tài khoản gốc trên bên phải sau đó chọn **"My API Keys"**.
 3.  Copy API key có sẵn hoặc tự tạo mới bằng nút **"Generate"** phía bên phải.
 
-\</details\>
-
 #### 2\. Clone repository
 
 ```bash
