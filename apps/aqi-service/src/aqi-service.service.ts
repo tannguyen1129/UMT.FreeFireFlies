@@ -1,3 +1,20 @@
+/*
+ * Copyright 2025 Green-AQI Navigator Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
 import { Injectable, Logger, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -44,7 +61,7 @@ export class AqiServiceService implements OnModuleInit {
   private readonly owmWeatherApiUrl = 'http://api.openweathermap.org/data/2.5/weather';
   
   
-  // 🚀 ĐỊNH NGHĨA CONTEXT CHUẨN
+
   private readonly NGSI_LD_CONTEXT = [
       'https://smartdatamodels.org/context.jsonld',
       'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.7.jsonld'
@@ -114,16 +131,13 @@ export class AqiServiceService implements OnModuleInit {
 
   }
 
-  // ================================================================
-  // 🔁 AGENT 1: THU THẬP DỮ LIỆU OWM (Đã ổn định)
-  // ================================================================
+
   @Cron('*/15 * * * *')  
   async handleOwmDataIngestion() {
     this.logger.log(`Running Data Ingestion Agent for OWM (Grid: ${HCMC_GRID.length} points)...`);
     
     let savedCount = 0;
 
-    // 🚀 BƯỚC 2: LẶP QUA TỪNG ĐIỂM TRONG LƯỚI
     for (const gridPoint of HCMC_GRID) {
       try {
         const response = await firstValueFrom(
@@ -145,8 +159,7 @@ export class AqiServiceService implements OnModuleInit {
         }
         
         const owmData = list[0]; 
-        
-        // 🚀 BƯỚC 3: TRUYỀN ID VÀ TỌA ĐỘ VÀO HÀM FORMAT
+
         const entityId = `urn:ngsi-ld:AirQualityStation:OWM-${gridPoint.id}`;
         const location = { lat: gridPoint.lat, lon: gridPoint.lon };
         
@@ -171,9 +184,7 @@ export class AqiServiceService implements OnModuleInit {
     this.logger.log(`✅ Successfully ingested and synced ${savedCount} OWM grid point(s).`);
   }
 
-  // ================================================================
-  // AGENT 2: THU THẬP KHÔNG GIAN XANH 
-  // ================================================================
+
   @Cron(CronExpression.EVERY_DAY_AT_3AM) 
   async handleGreenSpaceIngestion() {
     this.logger.log('Running Data Ingestion Agent for OpenStreetMap (Overpass)...');
@@ -225,9 +236,6 @@ export class AqiServiceService implements OnModuleInit {
     }
   }
 
-  // ================================================================
-  // AGENT 3: THU THẬP DỮ LIỆU THỜI TIẾT (MỚI)
-  // ================================================================
   @Cron('*/15 * * * *')
   async handleWeatherDataIngestion() {
     this.logger.log(`Running Data Ingestion Agent for OWM (Weather Grid: ${HCMC_GRID.length} points)...`);
@@ -291,9 +299,7 @@ export class AqiServiceService implements OnModuleInit {
     }
   }
 
-  // ================================================================
-  // 🏥 AGENT 4: SENSITIVE AREA (TỐI ƯU HÓA)
-  // ================================================================
+
   @Cron(CronExpression.EVERY_DAY_AT_4AM) 
   async handleSensitiveAreaIngestion() {
     this.logger.log('Running Agent for Sensitive Areas (Optimized)...');
@@ -328,9 +334,7 @@ export class AqiServiceService implements OnModuleInit {
     }
   }
 
-  // ================================================================
-  // 🛣️ AGENT 5: ROAD FEATURES (TỐI ƯU HÓA)
-  // ================================================================
+
   @Cron(CronExpression.EVERY_WEEK)
   async handleRoadFeatureIngestion() {
     this.logger.log(`Running Agent for Road Features (Optimized)...`);
@@ -361,14 +365,12 @@ export class AqiServiceService implements OnModuleInit {
             this.logger.error(`❌ Failed ${gridPoint.id} (Final): ${error.message}`);
         }
 
-        // 🚀 TĂNG THỜI GIAN NGHỈ LÊN 10 GIÂY
         await sleep(10000); 
     }
     
     this.logger.log(`✅ Successfully ingested and synced ${savedCount} Road Features.`);
   }
 
-  // 🚀 TÍNH NĂNG 6: KHOA HỌC CÔNG DÂN
   async createPerception(dto: CreatePerceptionDto, userId: string) {
     this.logger.log(`User ${userId} báo cáo cảm nhận: Mức ${dto.feeling}`);
 
@@ -404,11 +406,6 @@ export class AqiServiceService implements OnModuleInit {
     return saved;
   }
 
-  // ================================================================
-  // 🧩 CÁC HÀM HELPER
-  // ================================================================
-
-  // 🚀 HELPER MỚI: Format Sensitive Area (Cập nhật logic phân loại)
   private formatOverpassToSensitiveArea(element: any): SensitiveArea | null {
     const geom: Polygon = {
       type: 'Polygon',
@@ -446,11 +443,11 @@ export class AqiServiceService implements OnModuleInit {
     }
     const obs = new AirQualityObservation();
     
-    obs.entity_id = entityId; // 👈 Dùng ID động
+    obs.entity_id = entityId; 
     obs.time = new Date(owmData.dt * 1000); 
     obs.location = {
       type: 'Point',
-      coordinates: [location.lon, location.lat], // 👈 Dùng tọa độ động
+      coordinates: [location.lon, location.lat],
     };
 
     // Map các thành phần
@@ -495,8 +492,7 @@ export class AqiServiceService implements OnModuleInit {
     obs.entity_id = entityId; 
     obs.time = new Date(weatherData.dt * 1000); 
     obs.location = { type: 'Point', coordinates: [location.lon, location.lat] };
-    
-    // 🚀 SỬA: Dùng đúng tên thuộc tính camelCase
+
     obs.temperature = weatherData.main?.temp;
     obs.relativeHumidity = weatherData.main?.humidity; // camelCase
     obs.windSpeed = weatherData.wind?.speed;           // camelCase
@@ -505,7 +501,6 @@ export class AqiServiceService implements OnModuleInit {
     return obs;
   }
 
-  // 🚀 HELPER MỚI: Format sang NGSI-LD
   private formatSensitiveAreaToNgsiLd(entity: SensitiveArea): any {
     return {
       id: `urn:ngsi-ld:SensitiveArea:${entity.entity_id}`, 
@@ -525,7 +520,6 @@ export class AqiServiceService implements OnModuleInit {
       location: { type: 'GeoProperty', value: obs.location },
       dateObserved: { type: 'Property', value: { '@type': 'DateTime', '@value': obs.time.toISOString() } },
       temperature: { type: 'Property', value: obs.temperature, unitCode: 'CEL' }, 
-      // 🚀 SỬA: Dùng đúng tên thuộc tính camelCase
       relativeHumidity: { type: 'Property', value: (obs.relativeHumidity || 0) / 100 }, 
       windSpeed: { type: 'Property', value: obs.windSpeed, unitCode: 'MTS' }, 
       windDirection: { type: 'Property', value: obs.windDirection }, 
@@ -543,11 +537,10 @@ export class AqiServiceService implements OnModuleInit {
       name: { type: 'Property', value: entity.name || 'Không rõ tên' },
       category: { type: 'Property', value: entity.category },
       location: { type: 'GeoProperty', value: entity.geom },
-      '@context': this.NGSI_LD_CONTEXT, // 👈 SỬA: Dùng biến nội bộ
+      '@context': this.NGSI_LD_CONTEXT, 
     };
   }
 
-  // 🚀 SỬA LỖI: Thêm @context nội tuyến
   private formatObservationToNgsiLd(obs: AirQualityObservation): any {
     const payload = {
       id: obs.entity_id,
@@ -560,7 +553,7 @@ export class AqiServiceService implements OnModuleInit {
       no2: { type: 'Property', value: obs.no2, unitCode: 'µg/m³' },
       so2: { type: 'Property', value: obs.so2, unitCode: 'µg/m³' },
       o3: { type: 'Property', value: obs.o3, unitCode: 'µg/m³' },
-      '@context': this.NGSI_LD_CONTEXT, // 👈 SỬA: Dùng biến nội bộ
+      '@context': this.NGSI_LD_CONTEXT, 
     };
     // Xóa thuộc tính rỗng
     Object.keys(payload).forEach(key => {
@@ -572,9 +565,6 @@ export class AqiServiceService implements OnModuleInit {
     return payload;
   }
 
-  // ================================================================
-  // 🔄 ĐỒNG BỘ DỮ LIỆU NGSI-LD (Đã Sửa Lỗi)
-  // ================================================================
   private async syncToOrionLD(payload: any, entityId?: string) {
     const idToSync = entityId || payload.id;
     if (!idToSync) {
@@ -582,7 +572,7 @@ export class AqiServiceService implements OnModuleInit {
       return;
     }
 
-    // 🚀 TRƯỜNG HỢP 1: Đây là PATCH (entityId được truyền vào)
+
     // (Giống như từ updateIncidentStatus)
     if (entityId) {
       try {
@@ -607,7 +597,6 @@ export class AqiServiceService implements OnModuleInit {
       return; // Kết thúc
     }
 
-    // 🚀 TRƯỜNG HỢP 2: Đây là POST (payload có 'id' và không có entityId)
     // (Giống như từ createIncident, handleOwm, handleGreenSpace)
     try {
       const postPayload = { ...payload };
@@ -616,7 +605,7 @@ export class AqiServiceService implements OnModuleInit {
       }
 
       await firstValueFrom(
-        this.httpService.post(this.ORION_LD_URL, postPayload, { // 👈 CHẠY POST
+        this.httpService.post(this.ORION_LD_URL, postPayload, { 
           headers: { 'Content-Type': 'application/ld+json' }, 
         }),
       );
@@ -634,9 +623,7 @@ export class AqiServiceService implements OnModuleInit {
     }
   }
 
-  // ================================================================
-  // 📈 FORECAST (DỰ BÁO)
-  // ================================================================
+
   async findAllForecasts(): Promise<any> {
     this.logger.log('--- (Tầng 2) Yêu cầu lấy danh sách Dự báo (Forecasts)...');
     
@@ -651,7 +638,7 @@ export class AqiServiceService implements OnModuleInit {
           params: params,
           headers: {
             'Accept': 'application/ld+json',
-             // 🚀 SỬA LỖI: Bỏ 'Link' header (Orion-LD không thích nó khi GET)
+
           },
           timeout: 5000,
         }),
@@ -663,9 +650,6 @@ export class AqiServiceService implements OnModuleInit {
     }
   }
 
-  // ================================================================
-  // ⚠️ INCIDENT (Đã sửa lỗi)
-  // ================================================================
   
   async createIncident(dto: CreateIncidentDto, userId: string): Promise<Incident> {
     this.logger.log(`--- (Tầng 2) BƯỚC 1: Nhận được request tạo Incident từ user: ${userId}`);
@@ -715,18 +699,14 @@ export class AqiServiceService implements OnModuleInit {
     return this.incidentTypeRepository.find();
   }
 
-  /**
-   * 🚀 HÀM MỚI: TẠO MỘT LOẠI SỰ CỐ (Đề xuất 2)
-   */
+
   async createIncidentType(dto: ManageIncidentTypeDto): Promise<IncidentType> {
     this.logger.log(`--- (Tầng 2) Admin tạo Loại Sự cố mới: ${dto.type_name}`);
     const newType = this.incidentTypeRepository.create(dto);
     return this.incidentTypeRepository.save(newType);
   }
 
-  /**
-   * 🚀 HÀM MỚI: CẬP NHẬT MỘT LOẠI SỰ CỐ (Đề xuất 2)
-   */
+
   async updateIncidentType(id: number, dto: ManageIncidentTypeDto): Promise<IncidentType> {
     this.logger.log(`--- (Tầng 2) Admin cập nhật Loại Sự cố ID: ${id}`);
     const type = await this.incidentTypeRepository.findOneBy({ type_id: id });
@@ -737,15 +717,12 @@ export class AqiServiceService implements OnModuleInit {
     // Cập nhật các trường
     type.type_name = dto.type_name;
     
-    // 🚀 SỬA LỖI: Gán giá trị rỗng ('') nếu dto.description là undefined
+
     type.description = dto.description ?? ''; 
     
     return this.incidentTypeRepository.save(type);
   }
 
-  /**
-   * 🚀 HÀM MỚI: XÓA MỘT LOẠI SỰ CỐ (Đề xuất 2)
-   */
   async deleteIncidentType(id: number): Promise<void> {
     this.logger.log(`--- (Tầng 2) Admin xóa Loại Sự cố ID: ${id}`);
     // TODO: Nên kiểm tra xem có incident nào đang dùng type này không trước khi xóa
@@ -755,12 +732,12 @@ export class AqiServiceService implements OnModuleInit {
     }
   }
 
-  // 🚀 HÀM MỚI: LẤY BÁO CÁO CỦA TÔI
+
   async findMyIncidents(userId: string): Promise<Incident[]> {
     this.logger.log(`--- (Tầng 2) User ${userId} yêu cầu lấy báo cáo CỦA TÔI...`);
     return this.incidentRepository.find({
       where: {
-        reported_by_user_id: userId, // 👈 Chỉ lọc theo user ID
+        reported_by_user_id: userId, 
       },
       relations: ['incidentType'], // Lấy luôn tên loại sự cố
       order: { created_at: 'DESC' }, // Sắp xếp mới nhất lên đầu
@@ -789,14 +766,12 @@ export class AqiServiceService implements OnModuleInit {
     const patchPayload = { status: { type: 'Property', value: dto.status }, '@context': this.NGSI_LD_CONTEXT };
     this.syncToOrionLD(patchPayload, entityId).catch(e => this.logger.error('Sync Error', e));
 
-    // 🚀 4. GỌI NOTIFICATION SERVICE (MỚI)
     // Gọi bất đồng bộ (không await) để không chặn UI của Admin
     this.notifyUserAboutIncident(incident.reported_by_user_id, incident.status, incident.description);
     
     return incident;
   }
 
-  // 🚀 HÀM HELPER MỚI (Thêm vào trong class)
   private async notifyUserAboutIncident(userId: string, status: string, description: string) {
       try {
           // Gọi sang Notification Service chạy ở cổng 3004
@@ -813,7 +788,6 @@ export class AqiServiceService implements OnModuleInit {
       }
   }
 
-  // 🚀 SỬA LỖI: Thêm @context nội tuyến
   private formatIncidentToNgsiLd(incident: Incident): any {
     const entityId = `urn:ngsi-ld:Incident:${incident.incident_id}`;
     return {
@@ -834,7 +808,7 @@ export class AqiServiceService implements OnModuleInit {
         type: 'Relationship',
         object: `urn:ngsi-ld:User:${incident.reported_by_user_id}`,
       },
-      '@context': this.NGSI_LD_CONTEXT, // 👈 SỬA: Dùng biến nội bộ
+      '@context': this.NGSI_LD_CONTEXT, 
     };
   }
 
@@ -842,7 +816,6 @@ export class AqiServiceService implements OnModuleInit {
     this.logger.log('--- (Tầng 2) Đang tổng hợp dữ liệu Analytics...');
 
     // 1. XU HƯỚNG AQI (24 Giờ qua)
-    // SQL: SELECT date_trunc('hour', time) as hour, AVG(pm2_5) FROM air_quality... GROUP BY hour
     const trendData = await this.observationRepository
       .createQueryBuilder('obs')
       .select("DATE_TRUNC('hour', obs.time)", 'hour')
