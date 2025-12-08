@@ -1,26 +1,36 @@
 <div align="center">
 
-# 🌿 Green-AQI Navigator
-### Nền tảng Dự báo Chất lượng Không khí Siêu địa phương & Điều hướng Xanh
+  <h1>🌿 Green-AQI Navigator</h1>
+  <h3>Nền tảng Dự báo Chất lượng Không khí Siêu địa phương & Điều hướng Xanh</h3>
 
-**Team: UMT.FreeFireFiles**
+  <p><b>Team: UMT.FreeFireFiles</b></p>
 
-[![OLP 2025](https://img.shields.io/badge/OLP_2025-HUTECH-red?style=for-the-badge&logo=viettel&logoColor=white)](https://olp.vn/)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](https://opensource.org/licenses/Apache-2.0)
-[![Tech Stack](https://img.shields.io/badge/Tech-Microservices%20%7C%20AI%20%7C%20IoT-green?style=for-the-badge)]()
-[![Live Demo](https://img.shields.io/badge/Demo-Live_App-orange?style=for-the-badge)](https://olp.umtoj.edu.vn/app/rescue-app/citizenpage-673f7d3ae443011fab9eaaab?branch=main)
+  <p>
+    <a href="https://olp.vn/">
+      <img src="https://img.shields.io/badge/OLP_2025-HUTECH-red?style=for-the-badge&logo=viettel&logoColor=white" alt="OLP 2025">
+    </a>
+    <a href="https://opensource.org/licenses/Apache-2.0">
+      <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge" alt="License">
+    </a>
+    <a href="#">
+      <img src="https://img.shields.io/badge/Tech-Microservices%20%7C%20AI%20%7C%20IoT-green?style=for-the-badge" alt="Tech Stack">
+    </a>
+    <a href="https://olp.umtoj.edu.vn/app/rescue-app/citizenpage-673f7d3ae443011fab9eaaab?branch=main">
+      <img src="https://img.shields.io/badge/Demo-Live_App-orange?style=for-the-badge" alt="Live Demo">
+    </a>
+  </p>
 
----
+  <hr>
 
-<p align="center">
-  <a href="https://github.com/tannguyen1129/UMT.FreeFireFlies/issues/new?template=bao_cao_loi.md">
-    <img src="https://img.shields.io/badge/🆘_Báo_cáo_Lỗi-(Bug_Report)-d9534f?style=flat-square" alt="Báo cáo lỗi" />
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/tannguyen1129/UMT.FreeFireFlies/issues/new?template=yeu_cau_tinh_nang.md">
-    <img src="https://img.shields.io/badge/🧑‍🏫_Yêu_cầu_Tính_năng-(Feature_Request)-0275d8?style=flat-square" alt="Yêu cầu tính năng" />
-  </a>
-</p>
+  <p align="center">
+    <a href="https://github.com/tannguyen1129/UMT.FreeFireFlies/issues/new?template=bao_cao_loi.md">
+      <img src="https://img.shields.io/badge/🆘_Báo_cáo_Lỗi-(Bug_Report)-d9534f?style=flat-square" alt="Báo cáo lỗi" />
+    </a>
+    &nbsp;&nbsp;
+    <a href="https://github.com/tannguyen1129/UMT.FreeFireFlies/issues/new?template=yeu_cau_tinh_nang.md">
+      <img src="https://img.shields.io/badge/🧑‍🏫_Yêu_cầu_Tính_năng-(Feature_Request)-0275d8?style=flat-square" alt="Yêu cầu tính năng" />
+    </a>
+  </p>
 
 </div>
 
@@ -201,6 +211,14 @@ docker compose -f docker-compose.fiware.yml up -d
 ```bash
 docker compose up -d --build
 ```
+
+### 5.3. Dựng Frontend Web Admin Dashboard
+
+Xem chi tiết tại đây: [Hướng dẫn cài đặt Web Admin Dashboard](https://tannguyen1129.github.io/UMT.FreeFireFiles-webdashboard/)
+
+### 5.4. Dựng Frontend Citizen
+
+Xem chi tiết tại đây: [Hướng dẫn cài đặt Frontend Citizen](https://tannguyen1129.github.io/UMT.FreeFireFlies-frontend/)
 
 -----
 
