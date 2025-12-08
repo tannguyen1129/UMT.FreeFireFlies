@@ -111,9 +111,6 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ### 5.1. Yêu cầu - Prerequisites
 
-<details>
-<summary><b>🔻 Click để xem hướng dẫn cài Docker & Node.js</b></summary>
-
 #### 1. Cài đặt Docker và Docker Compose
 
 Gỡ bản Docker cũ (nếu có):
