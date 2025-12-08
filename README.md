@@ -6,7 +6,7 @@
   <p><b>Team: UMT.FreeFireFiles</b></p>
 
   <p>
-    <a href="https://olp.vn/">
+    <a href="https://www.olp.vn/">
       <img src="https://img.shields.io/badge/OLP_2025-HUTECH-red?style=for-the-badge&logo=viettel&logoColor=white" alt="OLP 2025">
     </a>
     <a href="https://opensource.org/licenses/Apache-2.0">
@@ -15,8 +15,8 @@
     <a href="#">
       <img src="https://img.shields.io/badge/Tech-Microservices%20%7C%20AI%20%7C%20IoT-green?style=for-the-badge" alt="Tech Stack">
     </a>
-    <a href="https://olp.umtoj.edu.vn/app/rescue-app/citizenpage-673f7d3ae443011fab9eaaab?branch=main">
-      <img src="https://img.shields.io/badge/Demo-Live_App-orange?style=for-the-badge" alt="Live Demo">
+    <a href="https://techgen.umt.edu.vn/">
+      <img src="https://img.shields.io/badge/UMT-orange?style=for-the-badge" alt="UMT">
     </a>
   </p>
 
@@ -49,8 +49,6 @@ Dự án được thực hiện nhằm mục đích tham gia bảng **[Phần m�
 ### 📄 Bản quyền
 
 Phần mềm được đội ngũ tác giả của **UMT.FreeFireFiles** open source theo giấy phép [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0).
-
-🚀 **Live Demo:** [Bấm vào đây để trải nghiệm ngay](https://olp.umtoj.edu.vn/app/rescue-app/citizenpage-673f7d3ae443011fab9eaaab?branch=main)
 
 -----
 
@@ -260,10 +258,14 @@ curl -X POST http://localhost:3003/auth/register -H 'Content-Type: application/j
 
 ```bash
 sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db -c "
+```
+
+Đổi role cho admin và goverment staff
+
+```bash
 INSERT INTO user_roles (user_id, role_id) SELECT u.user_id, r.role_id FROM users u, roles r WHERE u.email = 'admin@green.aqi' AND r.role_name = 'admin' ON CONFLICT DO NOTHING;
 INSERT INTO user_roles (user_id, role_id) SELECT u.user_id, r.role_id FROM users u, roles r WHERE u.email = 'gov@green.aqi' AND r.role_name = 'government_official' ON CONFLICT DO NOTHING;
 DELETE FROM user_roles WHERE role_id = (SELECT role_id FROM roles WHERE role_name = 'citizen') AND user_id IN (SELECT user_id FROM users WHERE email IN ('admin@green.aqi', 'gov@green.aqi'));
-"
 ```
 
 -----
