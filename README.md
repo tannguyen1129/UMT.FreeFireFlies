@@ -146,8 +146,6 @@ curl -fsSL [https://deb.nodesource.com/setup_20.x](https://deb.nodesource.com/se
 sudo apt-get install -y nodejs
 ```
 
-\</details\>
-
 ### 5.2. Dựng APIs (Backend)
 
 **Bước 1: Lấy API Key**
@@ -206,9 +204,6 @@ Hệ thống sử dụng **RBAC** (Role-Based Access Control). Dưới đây là
 | **Admin** | `admin@green.aqi`| `Password123` | Web Dashboard |
 
 ### ⚙️ Database Seeding (Khôi phục dữ liệu)
-
-\<details\>
-\<summary\>\<b\>🔻 Click để xem lệnh tạo lại tài khoản khi reset DB\</b\>\</summary\>
 
 Nếu bạn xóa Database hoặc deploy mới, hãy chạy các lệnh sau để tạo tài khoản và phân quyền chuẩn:
 
@@ -270,7 +265,14 @@ Chúng tôi hoan nghênh mọi đóng góp (Pull Request)\!
 
 -----
 
-## 10\. Phụ lục
+## 📜 9. Giấy phép (License)
+
+Dự án được phân phối dưới giấy phép **Apache 2.0 License**. 
+Vui lòng xem file [LICENSE](LICENSE) để biết thêm thông tin chi tiết về quyền hạn và nghĩa vụ.
+
+---
+
+## 10. Phụ lục
 
 ### 🔥 Cấu hình Firebase Admin SDK (Cho Notification)
 
@@ -286,9 +288,4 @@ Chúng tôi hoan nghênh mọi đóng góp (Pull Request)\!
 
 -----
 
-\<div align="center"\>
-\<i\>Distributed under the Apache 2.0 License. Built with ❤️ by UMT.FreeFireFiles\</i\>
-\</div\>
-
-```
-```
+Distributed under the Apache 2.0 License. Built with ❤️ by UMT.FreeFireFiles
