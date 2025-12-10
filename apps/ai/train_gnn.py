@@ -14,21 +14,21 @@
 # limitations under the License.
 #
 
-
 import os
 import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import joblib
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
-from geopy.distance import geodesic
 from sklearn.preprocessing import MinMaxScaler
-import joblib
-from gnn_model import ST_GNN
+from gnn_model import ST_GNN  
 
 # Cấu hình
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Đủ 9 trạm như yêu cầu
 HCMC_GRID = [
   { 'id': 'ThuDuc', 'lat': 10.8231, 'lon': 106.7711 },
   { 'id': 'District12', 'lat': 10.8672, 'lon': 106.6415 },
@@ -40,135 +40,144 @@ HCMC_GRID = [
   { 'id': 'BinhChanh', 'lat': 10.718, 'lon': 106.6067 },
   { 'id': 'CanGio', 'lat': 10.518, 'lon': 106.8776 },
 ]
-NUM_NODES = len(HCMC_GRID)
-SEQ_LENGTH = 4 
-DISTANCE_THRESHOLD_KM = 15.0 # Các trạm cách nhau < 15km sẽ có cạnh nối
+NUM_NODES = len(HCMC_GRID) # = 9
+SEQ_LENGTH = 4  
+EPOCHS = 100     # Tăng epoch lên để học kỹ hơn với dữ liệu ít
+LEARNING_RATE = 0.005 # Giảm learning rate để hội tụ ổn định
 
 def get_db_engine():
     env_path = os.path.join(BASE_DIR, '..', '..', '.env')
     load_dotenv(env_path)
-    db_url = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@" \
-             f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    
+    db_host = os.getenv('DB_HOST') or 'postgres-db'
+    db_user = os.getenv('DB_USER') or 'admin'
+    db_pass = os.getenv('DB_PASS') or 'admin123'
+    db_port = os.getenv('DB_PORT') or '5432'
+    db_name = os.getenv('DB_NAME') or 'green_aqi_db'
+    
+    db_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
     return create_engine(db_url)
 
-# 1. TẠO CẠNH (EDGE INDEX) DỰA TRÊN KHOẢNG CÁCH
-def build_graph_edges():
-    src_nodes = []
-    dst_nodes = []
-    weights = []
-    
-    print("🌐 Đang xây dựng đồ thị kết nối các trạm...")
-    for i in range(NUM_NODES):
-        for j in range(NUM_NODES):
-            if i == j: continue # Không nối với chính nó (hoặc có thể nối tùy mô hình)
-            
-            coord_i = (HCMC_GRID[i]['lat'], HCMC_GRID[i]['lon'])
-            coord_j = (HCMC_GRID[j]['lat'], HCMC_GRID[j]['lon'])
-            dist = geodesic(coord_i, coord_j).km
-            
-            if dist <= DISTANCE_THRESHOLD_KM:
-                src_nodes.append(i)
-                dst_nodes.append(j)
-                weights.append(1.0 / dist) # Nghịch đảo khoảng cách làm trọng số
-    
-    edge_index = torch.tensor([src_nodes, dst_nodes], dtype=torch.long)
-    edge_weight = torch.tensor(weights, dtype=torch.float)
-    print(f"✅ Đồ thị có {len(src_nodes)} cạnh kết nối.")
-    return edge_index, edge_weight
-
-# 2. TẢI VÀ ĐỒNG BỘ DỮ LIỆU
-def load_synced_data(engine):
-    # Chúng ta cần một DataFrame lớn chứa dữ liệu của cả 9 trạm, index theo thời gian
-    combined_df = pd.DataFrame()
-    
-    print("📥 Đang tải và đồng bộ dữ liệu từ 9 trạm...")
-    for i, node in enumerate(HCMC_GRID):
-        query = text(f"SELECT time, pm2_5 FROM air_quality_observations WHERE entity_id = 'urn:ngsi-ld:AirQualityStation:OWM-{node['id']}' ORDER BY time")
+def load_data_from_db(engine):
+    print("📥 Đang tải dữ liệu từ Database...")
+    dfs = []
+    for point in HCMC_GRID:
+        entity_id = f"urn:ngsi-ld:AirQualityStation:OWM-{point['id']}"
+        query = text(f"""
+            SELECT time, pm2_5 
+            FROM air_quality_observations 
+            WHERE entity_id = '{entity_id}'
+            ORDER BY time ASC
+        """)
         with engine.connect() as conn:
             df = pd.read_sql(query, conn)
             
-        df['time'] = pd.to_datetime(df['time'])
-        df.set_index('time', inplace=True)
-        df = df.resample('15min').mean().interpolate()
-        
-        # Đổi tên cột để merge
-        df = df.rename(columns={'pm2_5': f'pm25_{i}'})
-        
-        if combined_df.empty:
-            combined_df = df
-        else:
-            combined_df = combined_df.join(df, how='inner') # Chỉ lấy mốc thời gian chung
-            
-    combined_df.dropna(inplace=True)
-    print(f"✅ Dữ liệu đồng bộ: {len(combined_df)} mốc thời gian chung.")
-    return combined_df
+            # Nếu trạm nào chưa có dữ liệu thì bỏ qua (hoặc xử lý fill sau)
+            if df.empty:
+                print(f"⚠️ Cảnh báo: Trạm {point['id']} chưa có dữ liệu!")
+                return None
 
-# 3. CHUẨN BỊ DATASET CHO GNN
-def create_gnn_dataset(df, seq_len):
-    # Output shape: [Num_Samples, Num_Nodes, Seq_Len, Features]
-    data_matrix = df.values # [Time, Num_Nodes]
+            df = df.rename(columns={'pm2_5': point['id']})
+            df = df.set_index('time')
+            # Fix Warning: Dùng '1h' thay vì '1H'
+            df = df.resample('1h').mean().interpolate(method='linear') 
+            dfs.append(df)
     
-    X, y = [], []
-    for i in range(len(data_matrix) - seq_len):
-        # Input: Cửa sổ trượt cho TẤT CẢ các trạm
-        # Shape: [Num_Nodes, Seq_Len] -> Cần reshape thành [Num_Nodes, Seq_Len, 1]
-        seq = data_matrix[i : i+seq_len].T 
-        label = data_matrix[i+seq_len] # Giá trị tương lai của tất cả trạm
-        
-        X.append(seq[..., np.newaxis]) # Thêm dimension feature
-        y.append(label)
-        
-    return torch.tensor(X, dtype=torch.float), torch.tensor(y, dtype=torch.float)
+    if not dfs: return None
 
-def main():
+    # Gộp tất cả lại thành 1 bảng lớn
+    dataset = pd.concat(dfs, axis=1).dropna()
+    print(f"📊 Dữ liệu sạch để train: {dataset.shape} (Thời gian x 9 Trạm)")
+    return dataset.values
+
+def create_sequences(data, seq_length):
+    # data shape: (Time_Steps, Num_Nodes) -> (381, 9)
+    xs, ys = [], []
+    for i in range(len(data) - seq_length):
+        x = data[i:(i + seq_length)]      # Input: 4 giờ liên tiếp
+        y = data[i + seq_length]          # Target: Giờ thứ 5
+        xs.append(x)
+        ys.append(y)
+    return np.array(xs), np.array(ys)
+
+def train():
     engine = get_db_engine()
     
-    # 1. Xây dựng Graph
-    edge_index, edge_weight = build_graph_edges()
-    
-    # 2. Dữ liệu
-    df = load_synced_data(engine)
-    if len(df) < 20:
-        print("❌ Chưa đủ dữ liệu đồng bộ để train GNN.")
+    # 1. Load Data
+    raw_data = load_data_from_db(engine)
+    if raw_data is None or len(raw_data) < SEQ_LENGTH + 2:
+        print("❌ Dữ liệu quá ít để train! Hãy đợi Crawler chạy thêm.")
         return
 
-    # Chuẩn hóa
+    # 2. Scale Data
     scaler = MinMaxScaler()
-    df_scaled = pd.DataFrame(scaler.fit_transform(df), columns=df.columns, index=df.index)
+    data_scaled = scaler.fit_transform(raw_data)
     
-    X, y = create_gnn_dataset(df_scaled, SEQ_LENGTH)
+    joblib.dump(scaler, os.path.join(BASE_DIR, 'gnn_scaler.joblib'))
+    print("💾 Đã lưu Scaler.")
+
+    # 3. Tạo Sequence
+    # X shape ban đầu: (Samples, Seq_Len, Nodes) = (N, 4, 9)
+    X, y = create_sequences(data_scaled, SEQ_LENGTH)
     
-    # 3. Model
+    # 🛑 FIX QUAN TRỌNG: Đổi trục để khớp với Model
+    # Model GNN yêu cầu: (Nodes, Seq_Len, Features) = (9, 4, 1) cho mỗi lần chạy
+    # Ta chuyển X thành: (Samples, Nodes, Seq_Len) = (N, 9, 4)
+    X = np.transpose(X, (0, 2, 1)) 
+    
+    # Thêm trục Features cuối cùng -> (Samples, Nodes, Seq_Len, 1) = (N, 9, 4, 1)
+    X = X[..., np.newaxis]         
+    
+    # Chuyển sang Tensor
+    X_tensor = torch.tensor(X, dtype=torch.float32)
+    y_tensor = torch.tensor(y, dtype=torch.float32)
+    
+    # Load cấu trúc đồ thị
+    try:
+        edge_index, edge_weight = torch.load(os.path.join(BASE_DIR, 'graph_structure.pt'))
+    except:
+        print("⚠️ Không tìm thấy graph_structure.pt, vui lòng chạy script tạo graph trước!")
+        return
+
+    # 4. Khởi tạo Model
     model = ST_GNN(num_nodes=NUM_NODES, input_dim=1, hidden_dim=16, output_dim=1)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     criterion = nn.MSELoss()
-    
-    # 4. Train Loop
-    print("🚀 Bắt đầu huấn luyện GNN...")
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    print(f"🏋️‍♀️ Bắt đầu Train ({EPOCHS} epochs) trên {len(X_tensor)} mẫu dữ liệu...")
     model.train()
-    for epoch in range(100):
+    
+    # 🛑 VÒNG LẶP TRAIN (Sửa lỗi 4D Input)
+    for epoch in range(EPOCHS):
         total_loss = 0
-        for i in range(len(X)): # Duyệt từng snapshot thời gian
+        
+        # Duyệt qua từng mẫu thời gian (Stochastic Gradient Descent)
+        for i in range(len(X_tensor)):
+            # Lấy 1 mẫu ra: X_tensor[i] có shape (9, 4, 1) -> ĐÚNG CHUẨN 3D
+            x_sample = X_tensor[i] 
+            y_sample = y_tensor[i] # (9,)
+            
             optimizer.zero_grad()
             
-            # Forward: Đưa 1 snapshot (9 trạm, 4 bước thời gian) vào
-            out = model(X[i], edge_index, edge_weight) 
+            # Forward pass
+            output = model(x_sample, edge_index, edge_weight)
             
-            loss = criterion(out.squeeze(), y[i])
+            # Tính loss: output shape (9, 1) vs y_sample (9,)
+            loss = criterion(output.squeeze(), y_sample)
+            
             loss.backward()
             optimizer.step()
+            
             total_loss += loss.item()
-            
+        
+        # In log mỗi 10 epoch
         if (epoch+1) % 10 == 0:
-            print(f"Epoch {epoch+1}, Loss: {total_loss/len(X):.4f}")
-            
-    # 5. Lưu
+            avg_loss = total_loss / len(X_tensor)
+            print(f"   Epoch {epoch+1}/{EPOCHS}, Avg Loss: {avg_loss:.6f}")
+
+    # 5. Lưu Model
     torch.save(model.state_dict(), os.path.join(BASE_DIR, 'gnn_model.pth'))
-    joblib.dump(scaler, os.path.join(BASE_DIR, 'gnn_scaler.joblib'))
-    # Lưu edge_index để dùng lúc predict
-    torch.save((edge_index, edge_weight), os.path.join(BASE_DIR, 'graph_structure.pt'))
-    
-    print("✅ Hoàn tất huấn luyện GNN.")
+    print("✅ Train hoàn tất! Đã lưu model mới vào gnn_model.pth")
 
 if __name__ == "__main__":
-    main()
+    train()

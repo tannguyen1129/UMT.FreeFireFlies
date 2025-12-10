@@ -132,7 +132,7 @@ export class AqiServiceService implements OnModuleInit {
   }
 
 
-  @Cron('*/15 * * * *')  
+  @Cron('*/5 * * * *')  
   async handleOwmDataIngestion() {
     this.logger.log(`Running Data Ingestion Agent for OWM (Grid: ${HCMC_GRID.length} points)...`);
     
@@ -236,7 +236,7 @@ export class AqiServiceService implements OnModuleInit {
     }
   }
 
-  @Cron('*/15 * * * *')
+  @Cron('*/5 * * * *')
   async handleWeatherDataIngestion() {
     this.logger.log(`Running Data Ingestion Agent for OWM (Weather Grid: ${HCMC_GRID.length} points)...`);
     
