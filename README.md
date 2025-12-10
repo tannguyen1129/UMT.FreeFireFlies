@@ -107,7 +107,13 @@ Dự án áp dụng kiến trúc **Microservices** hiện đại, đảm bảo t
 
 ## 🏗 4. Kiến trúc của dự án
 
+**1. kiến trúc tổng quan**
+
 ![Kiến trúc PMNM](doc/Kien-truc-pmnm.png)
+
+**2. Kiến trúc của mô hình GNN**
+
+![Kiến trúc mô hình](doc/Kien-truc-GNN.jpg)
 
 -----
 
@@ -238,7 +244,30 @@ Nếu bạn xóa Database hoặc deploy mới, hãy chạy các lệnh sau để
 
 🛠️ Bấm để xem lệnh tạo tài khoản và phân quyền
 
-**1. Đăng ký tài khoản qua API:**
+**1. Tạo role trong database**
+
+Chạy câu lệnh này trước, truy cập vào database
+
+```bash
+sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db
+```
+
+Dùng lệnh truy vấn tạo ra 3 role user
+
+```bash
+INSERT INTO roles (role_name, description) VALUES 
+('admin', 'Administrator'),
+('government_official', 'Government Official'),
+('citizen', 'Citizen')
+ON CONFLICT (role_name) DO NOTHING;"
+```
+
+Sau đó thoát
+```bash
+\q
+```
+
+**2. Đăng ký tài khoản qua API:**
 
 ```bash
 # Admin
@@ -257,7 +286,7 @@ curl -X POST http://localhost:3003/auth/register -H 'Content-Type: application/j
 **2. Cấp quyền trong PostgreSQL:**
 
 ```bash
-sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db -c "
+sudo docker exec -it green-aqi-postgres psql -U postgres -d green_aqi_db
 ```
 
 Đổi role cho admin và goverment staff

@@ -213,48 +213,51 @@ export class AqiServiceController {
   async getRecommendations(
     @Query(new ValidationPipe({ transform: true })) dto: GetRecommendationDto,
   ) {
-    // 1. Lấy các tuyến đường (từ ORS)
+    // 1. Lấy dữ liệu đường đi (ORS)
     const routesGeoJson = await this.routePlannerService.getRawRoutes(dto);
     
-    // 2. Lấy TẤT CẢ dữ liệu quan trắc (từ Orion-LD)
+    // 2. Lấy dữ liệu quan trắc (Orion-LD)
     const observations = await this.routePlannerService.getObservationData();
 
-    // 3. Chấm điểm các tuyến đường (Logic mới)
+    // 3. Tính toán chi tiết từng điểm
     routesGeoJson.features.forEach((route: any, index: number) => {
-      let totalExposure = 0; 
-      
-      const segments = route.properties.segments;
+      let totalExposure = 0; // Tích lũy: (PM2.5 * Thời gian đi qua)
       const coordinates = route.geometry.coordinates; // [[lng, lat], ...]
+      const pointAqis: number[] = []; // Mảng lưu PM2.5 của từng điểm
 
-      segments.forEach((segment: any) => {
-        const duration = segment.duration; 
+      // Lấy tổng thời gian (giây) và tổng khoảng cách (mét)
+      const totalDuration = route.properties.summary.duration;
+      const totalDistance = route.properties.summary.distance;
+      // Ước lượng thời gian đi qua mỗi đoạn nhỏ (giả sử tốc độ đều)
+      const timePerPoint = totalDuration / coordinates.length;
+
+      coordinates.forEach((coord: number[]) => {
+        const point = { lat: coord[1], lng: coord[0] }; 
         
-        const startPointIndex = segment.steps[0].way_points[0];
-        const coord = coordinates[startPointIndex]; // [lng, lat]
+        // Nội suy PM2.5 tại điểm này
+        const pm25 = this.routePlannerService.interpolateAqAtPoint(point, observations);
         
-        // SỬA LỖI: Dùng object đơn giản, không dùng class 'LatLng'
-        const segmentMidPoint = { lat: coord[1], lng: coord[0] }; 
-
-        const pm25Score = this.routePlannerService.interpolateAqAtPoint(
-          segmentMidPoint,
-          observations,
-        );
-
-        totalExposure += (pm25Score * duration);
+        pointAqis.push(pm25); // Lưu lại để vẽ màu
+        
+        // Cộng dồn vào tổng lượng bụi hấp thụ (Liều lượng = Nồng độ * Thời gian)
+        totalExposure += (pm25 * timePerPoint);
       });
 
-      route.properties.exposureScore = totalExposure; 
+      // Gắn dữ liệu vào response
+      route.properties.exposureScore = totalExposure; // Để sắp xếp
+      route.properties.exposureValue = Math.round(totalExposure); // Để hiển thị (VD: 1500)
+      route.properties.avgPm25 = (pointAqis.reduce((a,b)=>a+b,0) / pointAqis.length).toFixed(1);
+      route.properties.pointAqis = pointAqis; // <--- MẢNG QUAN TRỌNG ĐỂ VẼ MÀU
       
-      if (index === 0) {
-        route.properties.routeType = 'fastest';
-      } else {
-        route.properties.routeType = 'alternative';
-      }
+      // Gán loại đường
+      if (index === 0) route.properties.routeType = 'fastest';
+      else route.properties.routeType = 'alternative';
     });
 
-    // Sắp xếp lại
+    // Sắp xếp: Ưu tiên đường có Lượng bụi tích lũy thấp nhất
     routesGeoJson.features.sort((a, b) => a.properties.exposureScore - b.properties.exposureScore);
 
+    // Gán nhãn Cleanest cho đường tốt nhất
     if (routesGeoJson.features.length > 0) {
        routesGeoJson.features[0].properties.routeType = 'cleanest';
     }
