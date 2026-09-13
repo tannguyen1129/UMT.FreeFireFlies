@@ -1,0 +1,87 @@
+name: green-aqi-research
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-green_aqi_research}
+      POSTGRES_USER: ${POSTGRES_USER:-green_aqi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - research_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - research
+
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    command: ["mongod", "--bind_ip_all"]
+    environment:
+      TZ: UTC
+    volumes:
+      - research_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - research
+
+  orion-ld:
+    image: fiware/orion-ld:1.10.0
+    restart: unless-stopped
+    command: ["-dbhost", "mongo", "-logLevel", "WARN"]
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - research
+
+  collector:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.collector
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT_AQI: 3002
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-green_aqi_research}
+      DB_USER: ${POSTGRES_USER:-green_aqi}
+      DB_PASS: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+      ORION_LD_URL: http://orion-ld:1026/ngsi-ld/v1/entities
+      OWM_API_KEY: ${OWM_API_KEY:?Set OWM_API_KEY in deploy/.env}
+      ORS_API_KEY: ${ORS_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in deploy/.env}
+      TZ: UTC
+    depends_on:
+      postgres:
+        condition: service_healthy
+      orion-ld:
+        condition: service_started
+    volumes:
+      - research_collector_uploads:/app/uploads
+    networks:
+      - research
+
+volumes:
+  research_postgres_data:
+  research_mongo_data:
+  research_collector_uploads:
+
+networks:
+  research:
+    driver: bridge
