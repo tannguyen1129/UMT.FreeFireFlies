@@ -13,8 +13,32 @@ The initial stack contains only:
 - FIWARE Orion-LD
 - the existing AQI service as the initial data collector
 
-No host ports are published by this compose file. Network separation and
-external ingress will be finalized in Phase 3.
+No host ports are published by this compose file.
+
+## Network isolation
+
+The deployment uses three explicitly named external Docker bridge networks:
+
+| Network | Purpose | Current members |
+| --- | --- | --- |
+| `green-aqi-edge` | Reserved for a reviewed public ingress proxy | None |
+| `green-aqi-app` | Collector-to-application communication and outbound upstream access | Collector, Orion-LD |
+| `green-aqi-data` | Private database communication | PostgreSQL, MongoDB, Orion-LD, collector |
+
+`green-aqi-data` is created with `internal: true`. PostgreSQL and MongoDB
+are connected only to this network. Orion-LD bridges the application and data
+networks, while the collector uses the application network for upstream API
+access and the data network for PostgreSQL access.
+
+The edge network intentionally has no member in the initial stack because no
+research endpoint is publicly exposed yet. A future ingress service may join
+the edge and application networks after review.
+
+Create the networks before the first deployment:
+
+```bash
+./deploy/scripts/create-networks.sh
+```
 
 ## Configuration
 
@@ -36,8 +60,23 @@ docker compose \
   config
 ```
 
-Do not start this stack until the networking review in Phase 3 and the
-research schema work in Phase 4 are complete.
+Do not start this stack until the research schema work in Phase 4 is complete.
+
+Confirm that no port is published:
+
+```bash
+docker compose \
+  --env-file deploy/.env \
+  -f deploy/compose.research.yml \
+  config | grep -nE 'published:|host_ip:'
+```
+
+The expected result is no output. After the stack is eventually deployed,
+inspect each network with:
+
+```bash
+docker network inspect green-aqi-edge green-aqi-app green-aqi-data
+```
 
 ## Persistent data
 
