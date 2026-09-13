@@ -8,7 +8,7 @@ RUN npm ci
 COPY nest-cli.json tsconfig*.json ./
 COPY apps/aqi-service ./apps/aqi-service
 COPY config ./config
-RUN npx nest build aqi-service
+RUN npx nest build research-collector
 
 FROM node:20-alpine AS runtime
 
@@ -18,7 +18,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY --from=builder /app/dist/apps/aqi-service ./dist/apps/aqi-service
+COPY --from=builder /app/dist/apps/aqi-service/research-collector.main.js ./dist/apps/research-collector/main.js
 COPY --from=builder /app/config ./config
 
 RUN mkdir -p /app/uploads \
@@ -26,4 +26,4 @@ RUN mkdir -p /app/uploads \
 
 USER node
 
-CMD ["node", "dist/apps/aqi-service/main.js"]
+CMD ["node", "dist/apps/research-collector/main.js"]

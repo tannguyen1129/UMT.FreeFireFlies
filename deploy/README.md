@@ -84,11 +84,10 @@ docker network inspect green-aqi-edge green-aqi-app green-aqi-data
 
 ## Persistent data
 
-The stack declares three Docker named volumes:
+The stack declares two Docker named volumes:
 
 - `research_postgres_data`
 - `research_mongo_data`
-- `research_collector_uploads`
 
 Removing these volumes can permanently destroy research data. Do not use
 `docker compose down --volumes` for this deployment.
@@ -96,3 +95,17 @@ Removing these volumes can permanently destroy research data. Do not use
 On a new PostgreSQL volume, scripts under `postgres/init/` create the research
 schema. These bootstrap scripts do not rerun against a populated volume.
 TypeORM schema synchronization is disabled for the research deployment.
+
+## Collector runtime
+
+The research collector runs air-quality and weather cycles independently. Both
+default to a 15-minute interval and are constrained to 10-60 minutes. Requests
+use a timeout, bounded concurrency, exponential retry backoff, and a delay
+between batches. A failed grid point does not stop the remaining points.
+
+PostgreSQL is written before Orion-LD synchronization. An Orion-LD outage is
+logged but does not roll back or discard the primary observation. The legacy
+OLP ingestion schedules are disabled in the research deployment.
+
+Runtime tuning is available through the collector variables documented in
+`.env.example`. Keep concurrency conservative to respect upstream rate limits.

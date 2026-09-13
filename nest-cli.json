@@ -28,6 +28,15 @@
         "tsConfigPath": "apps/aqi-service/tsconfig.app.json"
       }
     },
+    "research-collector": {
+      "type": "application",
+      "root": "apps/aqi-service",
+      "entryFile": "research-collector.main",
+      "sourceRoot": "apps/aqi-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/aqi-service/tsconfig.app.json"
+      }
+    },
     "auth-service": {
       "type": "application",
       "root": "apps/auth-service",
