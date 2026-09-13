@@ -3,7 +3,7 @@ import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
 @Entity({ name: 'road_features' })
 export class RoadFeature {
   @PrimaryColumn({ name: 'entity_id', type: 'varchar', length: 255 })
-  entity_id: string; // ID của trạm (ví dụ: urn:ngsi-ld:AirQualityStation:OWM-ThuDuc)
+  entity_id: string; // ID của điểm lưới nghiên cứu (ví dụ: urn:ngsi-ld:AQGridPoint:OWM-HCMC-G001)
 
   @Column({ name: 'major_road_count', type: 'integer' })
   majorRoadCount: number; // Số lượng đoạn đường chính (primary/secondary) trong bán kính 500m

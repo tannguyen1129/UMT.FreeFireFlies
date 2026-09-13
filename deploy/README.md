@@ -13,6 +13,10 @@ The initial stack contains only:
 - FIWARE Orion-LD
 - the existing AQI service as the initial data collector
 
+The collector reads its 25 query coordinates from the version-controlled
+`config/research-grid.json` file. They are research grid points and must not be
+represented as physical monitoring stations.
+
 No host ports are published by this compose file.
 
 ## Network isolation

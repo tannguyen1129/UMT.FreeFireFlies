@@ -37,18 +37,11 @@ import { PerceivedAirQuality } from './entities/perceived-air-quality.entity';
 import { CreatePerceptionDto } from './dto/create-perception.dto';
 import type { Polygon } from 'geojson'; 
 import { MoreThan } from 'typeorm';
-
-const HCMC_GRID = [
-  { id: 'ThuDuc', lat: 10.8231, lon: 106.7711 }, // Q.Thủ Đức (cũ)
-  { id: 'District12', lat: 10.8672, lon: 106.6415 }, // Q.12
-  { id: 'HocMon', lat: 10.8763, lon: 106.5941 }, // H.Hóc Môn
-  { id: 'District1', lat: 10.7769, lon: 106.7009 }, // Q.1 (Trung tâm)
-  { id: 'BinhTan', lat: 10.7656, lon: 106.6031 }, // Q.Bình Tân
-  { id: 'District2', lat: 10.7877, lon: 106.7407 }, // Q.2 (cũ)
-  { id: 'District7', lat: 10.734, lon: 106.7206 }, // Q.7
-  { id: 'BinhChanh', lat: 10.718, lon: 106.6067 }, // H.Bình Chánh
-  { id: 'CanGio', lat: 10.518, lon: 106.8776 }, // H.Cần Giờ
-];
+import {
+  loadResearchGridConfig,
+  ResearchGridConfig,
+  ResearchGridPointConfig,
+} from './config/research-grid';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -57,6 +50,7 @@ export class AqiServiceService implements OnModuleInit {
   private readonly logger = new Logger(AqiServiceService.name);
   private readonly ORION_LD_URL: string;
   private readonly OWM_API_KEY: string; 
+  private readonly researchGrid: ResearchGridConfig;
   private readonly owmApiUrl = 'http://api.openweathermap.org/data/2.5/air_pollution';
   private readonly overpassApiUrl = 'https://overpass-api.de/api/interpreter';
   private readonly owmWeatherApiUrl = 'http://api.openweathermap.org/data/2.5/weather';
@@ -98,6 +92,15 @@ export class AqiServiceService implements OnModuleInit {
     const owmKey = this.configService.get<string>('OWM_API_KEY');
     if (!owmKey) throw new Error('OWM_API_KEY is not defined in .env file');
     this.OWM_API_KEY = owmKey;
+
+    const gridPath = this.configService.get<string>(
+      'RESEARCH_GRID_PATH',
+      'config/research-grid.json',
+    );
+    this.researchGrid = loadResearchGridConfig(gridPath);
+    this.logger.log(
+      `Loaded research grid ${this.researchGrid.version} with ${this.researchGrid.points.length} points`,
+    );
   }
 
   async onModuleInit() {
@@ -137,11 +140,11 @@ export class AqiServiceService implements OnModuleInit {
 
   @Cron('*/5 * * * *')  
   async handleOwmDataIngestion() {
-    this.logger.log(`Running Data Ingestion Agent for OWM (Grid: ${HCMC_GRID.length} points)...`);
+    this.logger.log(`Running Data Ingestion Agent for OWM (Grid: ${this.researchGrid.points.length} points)...`);
     
     let savedCount = 0;
 
-    for (const gridPoint of HCMC_GRID) {
+    for (const gridPoint of this.researchGrid.points) {
       try {
         const response = await firstValueFrom(
           this.httpService.get(this.owmApiUrl, {
@@ -239,10 +242,10 @@ export class AqiServiceService implements OnModuleInit {
 
   @Cron('*/5 * * * *')
   async handleWeatherDataIngestion() {
-    this.logger.log(`Running Data Ingestion Agent for OWM (Weather Grid: ${HCMC_GRID.length} points)...`);
+    this.logger.log(`Running Data Ingestion Agent for OWM (Weather Grid: ${this.researchGrid.points.length} points)...`);
     
     let savedCount = 0;
-    for (const gridPoint of HCMC_GRID) {
+    for (const gridPoint of this.researchGrid.points) {
       try {
         const response = await firstValueFrom(
           this.httpService.get(this.owmWeatherApiUrl, { 
@@ -340,8 +343,8 @@ export class AqiServiceService implements OnModuleInit {
     
     let savedCount = 0;
     
-    for (const gridPoint of HCMC_GRID) {
-        const stationId = `urn:ngsi-ld:AirQualityStation:OWM-${gridPoint.id}`;
+    for (const gridPoint of this.researchGrid.points) {
+        const observationPointId = `urn:ngsi-ld:AQGridPoint:OWM-${gridPoint.id}`;
         const overpassQuery = `[out:json][timeout:90];(way(around:500, ${gridPoint.lat}, ${gridPoint.lon})["highway"~"primary|secondary"];);out count;`;
 
         try {
@@ -356,7 +359,7 @@ export class AqiServiceService implements OnModuleInit {
             );
             
             const count = response.data?.elements?.[0]?.tags?.total || 0; 
-            await this.roadFeatureRepository.upsert({ entity_id: stationId, majorRoadCount: parseInt(count, 10) }, ['entity_id']);
+            await this.roadFeatureRepository.upsert({ entity_id: observationPointId, majorRoadCount: parseInt(count, 10) }, ['entity_id']);
             savedCount++;
             this.logger.log(`[RoadFeature] ${gridPoint.id}: ${count} major roads.`);
 
@@ -443,7 +446,7 @@ export class AqiServiceService implements OnModuleInit {
 
     obs.gridPoint = gridPoint;
     obs.gridPointId = gridPoint.id;
-    obs.source = 'openweathermap';
+    obs.source = gridPoint.source;
     obs.sourceObservedAt = new Date(owmData.dt * 1000);
 
     // Map các thành phần
@@ -495,7 +498,7 @@ export class AqiServiceService implements OnModuleInit {
     const obs = new WeatherObservation();
     obs.gridPoint = gridPoint;
     obs.gridPointId = gridPoint.id;
-    obs.source = 'openweathermap';
+    obs.source = gridPoint.source;
     obs.sourceObservedAt = new Date(weatherData.dt * 1000);
     obs.temperature = weatherData.main?.temp ?? null;
     obs.humidity = weatherData.main?.humidity ?? null;
@@ -509,26 +512,23 @@ export class AqiServiceService implements OnModuleInit {
     return obs;
   }
 
-  private async getOrCreateGridPoint(gridPoint: {
-    id: string;
-    lat: number;
-    lon: number;
-  }): Promise<AQGridPoint> {
-    const code = `HCMC-OLP-${gridPoint.id}`;
+  private async getOrCreateGridPoint(
+    gridPoint: ResearchGridPointConfig,
+  ): Promise<AQGridPoint> {
     await this.gridPointRepository.upsert(
       {
-        code,
-        name: gridPoint.id,
+        code: gridPoint.id,
+        name: gridPoint.name,
         latitude: gridPoint.lat,
         longitude: gridPoint.lon,
-        source: 'openweathermap',
-        gridVersion: 'hcmc-olp-v0',
+        source: this.researchGrid.source,
+        gridVersion: this.researchGrid.version,
         active: true,
       },
       ['code'],
     );
 
-    return this.gridPointRepository.findOneByOrFail({ code });
+    return this.gridPointRepository.findOneByOrFail({ code: gridPoint.id });
   }
 
   private async upsertAirQualityObservation(
@@ -939,11 +939,10 @@ export class AqiServiceService implements OnModuleInit {
 
     // Bước 3c: Gộp lại (Join trong code)
     const correlationData = stationStats.map((stat) => {
-      const legacyGridId = stat.grid_code.replace('HCMC-OLP-', '');
-      const roadData = roadFeatures.find((r) => r.entity_id.endsWith(`OWM-${legacyGridId}`));
+      const roadData = roadFeatures.find((r) => r.entity_id.endsWith(`OWM-${stat.grid_code}`));
       
       return {
-        district: legacyGridId,
+        district: stat.grid_code,
         pm25: parseFloat(stat.avg_pm25), // Ép kiểu về số
         roadCount: roadData ? roadData.majorRoadCount : 0,
       };

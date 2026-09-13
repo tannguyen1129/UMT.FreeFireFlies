@@ -1,0 +1,33 @@
+{
+  "version": "hcmc-grid-v1",
+  "study_area": "Ho Chi Minh City",
+  "source": "openweathermap",
+  "created_at": "2026-09-13",
+  "points": [
+    { "id": "HCMC-G001", "name": "HCMC Research Grid Point 001", "lat": 10.4120, "lon": 106.9547 },
+    { "id": "HCMC-G002", "name": "HCMC Research Grid Point 002", "lat": 10.5420, "lon": 106.8840 },
+    { "id": "HCMC-G003", "name": "HCMC Research Grid Point 003", "lat": 10.6290, "lon": 106.8210 },
+    { "id": "HCMC-G004", "name": "HCMC Research Grid Point 004", "lat": 10.6750, "lon": 106.7630 },
+    { "id": "HCMC-G005", "name": "HCMC Research Grid Point 005", "lat": 10.7040, "lon": 106.6600 },
+    { "id": "HCMC-G006", "name": "HCMC Research Grid Point 006", "lat": 10.7180, "lon": 106.6067 },
+    { "id": "HCMC-G007", "name": "HCMC Research Grid Point 007", "lat": 10.7340, "lon": 106.7206 },
+    { "id": "HCMC-G008", "name": "HCMC Research Grid Point 008", "lat": 10.7450, "lon": 106.7900 },
+    { "id": "HCMC-G009", "name": "HCMC Research Grid Point 009", "lat": 10.7656, "lon": 106.6031 },
+    { "id": "HCMC-G010", "name": "HCMC Research Grid Point 010", "lat": 10.7769, "lon": 106.7009 },
+    { "id": "HCMC-G011", "name": "HCMC Research Grid Point 011", "lat": 10.7877, "lon": 106.7407 },
+    { "id": "HCMC-G012", "name": "HCMC Research Grid Point 012", "lat": 10.8010, "lon": 106.6350 },
+    { "id": "HCMC-G013", "name": "HCMC Research Grid Point 013", "lat": 10.8231, "lon": 106.7711 },
+    { "id": "HCMC-G014", "name": "HCMC Research Grid Point 014", "lat": 10.8350, "lon": 106.6900 },
+    { "id": "HCMC-G015", "name": "HCMC Research Grid Point 015", "lat": 10.8500, "lon": 106.8200 },
+    { "id": "HCMC-G016", "name": "HCMC Research Grid Point 016", "lat": 10.8672, "lon": 106.6415 },
+    { "id": "HCMC-G017", "name": "HCMC Research Grid Point 017", "lat": 10.8763, "lon": 106.5941 },
+    { "id": "HCMC-G018", "name": "HCMC Research Grid Point 018", "lat": 10.8850, "lon": 106.7300 },
+    { "id": "HCMC-G019", "name": "HCMC Research Grid Point 019", "lat": 10.9000, "lon": 106.8000 },
+    { "id": "HCMC-G020", "name": "HCMC Research Grid Point 020", "lat": 10.9150, "lon": 106.6800 },
+    { "id": "HCMC-G021", "name": "HCMC Research Grid Point 021", "lat": 10.9450, "lon": 106.5750 },
+    { "id": "HCMC-G022", "name": "HCMC Research Grid Point 022", "lat": 10.9700, "lon": 106.6600 },
+    { "id": "HCMC-G023", "name": "HCMC Research Grid Point 023", "lat": 11.0000, "lon": 106.5150 },
+    { "id": "HCMC-G024", "name": "HCMC Research Grid Point 024", "lat": 11.0200, "lon": 106.6000 },
+    { "id": "HCMC-G025", "name": "HCMC Research Grid Point 025", "lat": 11.0500, "lon": 106.7000 }
+  ]
+}

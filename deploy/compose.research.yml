@@ -69,6 +69,7 @@ services:
       OWM_API_KEY: ${OWM_API_KEY:?Set OWM_API_KEY in deploy/.env}
       ORS_API_KEY: ${ORS_API_KEY:-}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in deploy/.env}
+      RESEARCH_GRID_PATH: config/research-grid.json
       TZ: UTC
     depends_on:
       postgres:

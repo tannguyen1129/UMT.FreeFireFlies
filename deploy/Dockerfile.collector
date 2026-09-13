@@ -7,6 +7,7 @@ RUN npm ci
 
 COPY nest-cli.json tsconfig*.json ./
 COPY apps/aqi-service ./apps/aqi-service
+COPY config ./config
 RUN npx nest build aqi-service
 
 FROM node:20-alpine AS runtime
@@ -18,6 +19,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist/apps/aqi-service ./dist/apps/aqi-service
+COPY --from=builder /app/config ./config
 
 RUN mkdir -p /app/uploads \
     && chown -R node:node /app
