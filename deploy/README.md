@@ -87,7 +87,7 @@ docker network inspect green-aqi-edge green-aqi-app green-aqi-data
 The stack declares two Docker named volumes:
 
 - `research_postgres_data`
-- `research_mongo_data`
+- `research_mongo5_data`
 
 Removing these volumes can permanently destroy research data. Do not use
 `docker compose down --volumes` for this deployment.
@@ -126,3 +126,6 @@ From the repository root, operators can print the JSON status with:
 ```bash
 ./deploy/scripts/healthcheck.sh
 ```
+
+PostgreSQL backup, Google Drive initialization, restore testing, and the
+nightly systemd schedule are documented in `BACKUP.md`.

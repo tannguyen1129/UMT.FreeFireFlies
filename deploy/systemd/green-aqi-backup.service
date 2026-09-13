@@ -1,0 +1,17 @@
+[Unit]
+Description=Green-AQI PostgreSQL backup to Google Drive
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/green-aqi/src/UMT.FreeFireFlies
+ExecStart=/opt/green-aqi/src/UMT.FreeFireFlies/deploy/scripts/backup-postgres.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target

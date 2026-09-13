@@ -23,15 +23,16 @@ services:
       - data
 
   mongo:
-    image: mongo:7.0
+    # Orion-LD 1.10 still uses legacy Mongo wire operations removed in MongoDB 6+.
+    image: mongo:5.0
     restart: unless-stopped
     command: ["mongod", "--bind_ip_all"]
     environment:
       TZ: UTC
     volumes:
-      - research_mongo_data:/data/db
+      - research_mongo5_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -102,7 +103,7 @@ services:
 
 volumes:
   research_postgres_data:
-  research_mongo_data:
+  research_mongo5_data:
 
 networks:
   edge:

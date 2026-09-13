@@ -22,3 +22,11 @@ degraded:
 ```
 
 An alternative environment-file path may be passed as the first argument.
+
+## Backup scripts
+
+- `initialize-google-drive.sh` creates the approved Drive folder layout.
+- `backup-postgres.sh` creates, validates, checksums, and uploads a dump.
+- `restore-test.sh` restores a dump into an isolated temporary database.
+
+See `deploy/BACKUP.md` for operator instructions and safety constraints.
