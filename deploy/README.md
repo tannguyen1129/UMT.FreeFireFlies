@@ -109,3 +109,20 @@ OLP ingestion schedules are disabled in the research deployment.
 
 Runtime tuning is available through the collector variables documented in
 `.env.example`. Keep concurrency conservative to respect upstream rate limits.
+
+## Health check
+
+The collector exposes `GET /internal/health/research` on port 3002 inside the
+application network only. The port is exposed to other containers but is not
+published on the VM host.
+
+The endpoint returns dependency status, collector state, latest source and
+ingestion timestamps, records in the last hour and 24 hours, stale and missing
+grid points, duplicate groups, and collection failure counts. Docker uses this
+endpoint for the collector container healthcheck.
+
+From the repository root, operators can print the JSON status with:
+
+```bash
+./deploy/scripts/healthcheck.sh
+```

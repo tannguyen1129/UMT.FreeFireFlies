@@ -72,12 +72,30 @@ services:
       COLLECTOR_MAX_RETRIES: ${COLLECTOR_MAX_RETRIES:-3}
       COLLECTOR_CONCURRENCY: ${COLLECTOR_CONCURRENCY:-2}
       COLLECTOR_BATCH_DELAY_MS: ${COLLECTOR_BATCH_DELAY_MS:-1000}
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      HEALTH_HOST: 0.0.0.0
+      HEALTH_PORT: 3002
+      HEALTH_DEPENDENCY_TIMEOUT_MS: ${HEALTH_DEPENDENCY_TIMEOUT_MS:-3000}
+      HEALTH_STALE_AFTER_MINUTES: ${HEALTH_STALE_AFTER_MINUTES:-45}
       TZ: UTC
     depends_on:
       postgres:
         condition: service_healthy
       orion-ld:
         condition: service_started
+    expose:
+      - "3002"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3002/internal/health/research').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     networks:
       - app
       - data

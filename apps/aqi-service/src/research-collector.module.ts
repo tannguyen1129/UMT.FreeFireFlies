@@ -6,6 +6,8 @@ import { AQGridPoint } from './entities/aq-grid-point.entity';
 import { AirQualityObservation } from './entities/air-quality-observation.entity';
 import { WeatherObservation } from './entities/weather-observation.entity';
 import { ResearchCollectorService } from './research-collector.service';
+import { ResearchHealthController } from './research-health.controller';
+import { ResearchHealthService } from './research-health.service';
 
 @Module({
   imports: [
@@ -32,6 +34,7 @@ import { ResearchCollectorService } from './research-collector.service';
       WeatherObservation,
     ]),
   ],
-  providers: [ResearchCollectorService],
+  controllers: [ResearchHealthController],
+  providers: [ResearchCollectorService, ResearchHealthService],
 })
 export class ResearchCollectorModule {}

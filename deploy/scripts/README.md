@@ -10,3 +10,15 @@ Run it before the first compose deployment:
 ```bash
 ./deploy/scripts/create-networks.sh
 ```
+
+## `healthcheck.sh`
+
+Calls the collector's internal research health endpoint from inside its
+container, prints formatted JSON, and exits non-zero when the platform is
+degraded:
+
+```bash
+./deploy/scripts/healthcheck.sh
+```
+
+An alternative environment-file path may be passed as the first argument.
