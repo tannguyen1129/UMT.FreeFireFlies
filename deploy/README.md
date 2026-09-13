@@ -129,3 +129,6 @@ From the repository root, operators can print the JSON status with:
 
 PostgreSQL backup, Google Drive initialization, restore testing, and the
 nightly systemd schedule are documented in `BACKUP.md`.
+
+Public exposure, Hetzner Cloud Firewall, and SSH/VPN validation are documented
+in `SECURITY.md`.

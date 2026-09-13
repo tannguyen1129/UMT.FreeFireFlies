@@ -30,3 +30,9 @@ An alternative environment-file path may be passed as the first argument.
 - `restore-test.sh` restores a dump into an isolated temporary database.
 
 See `deploy/BACKUP.md` for operator instructions and safety constraints.
+
+## `security-check.sh`
+
+Checks host listeners, Docker port publications, SSH authentication settings,
+and local secret-file permissions. See `deploy/SECURITY.md` for the required
+Hetzner Firewall and safe SSH/VPN hardening procedure.
