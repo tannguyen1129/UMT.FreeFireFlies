@@ -50,10 +50,11 @@ export class AqiServiceService implements OnModuleInit {
   private readonly logger = new Logger(AqiServiceService.name);
   private readonly ORION_LD_URL: string;
   private readonly OWM_API_KEY: string; 
+  private readonly notificationServiceUrl: string;
   private readonly researchGrid: ResearchGridConfig;
-  private readonly owmApiUrl = 'http://api.openweathermap.org/data/2.5/air_pollution';
+  private readonly owmApiUrl = 'https://api.openweathermap.org/data/2.5/air_pollution';
   private readonly overpassApiUrl = 'https://overpass-api.de/api/interpreter';
-  private readonly owmWeatherApiUrl = 'http://api.openweathermap.org/data/2.5/weather';
+  private readonly owmWeatherApiUrl = 'https://api.openweathermap.org/data/2.5/weather';
   
   
 
@@ -92,6 +93,11 @@ export class AqiServiceService implements OnModuleInit {
     const owmKey = this.configService.get<string>('OWM_API_KEY');
     if (!owmKey) throw new Error('OWM_API_KEY is not defined in .env file');
     this.OWM_API_KEY = owmKey;
+
+    this.notificationServiceUrl = this.configService.get<string>(
+      'NOTIFICATION_SERVICE_URL',
+      'http://notification-service:3004/api',
+    );
 
     const gridPath = this.configService.get<string>(
       'RESEARCH_GRID_PATH',
@@ -856,7 +862,7 @@ export class AqiServiceService implements OnModuleInit {
       try {
           // Gọi sang Notification Service chạy ở cổng 3004
           await firstValueFrom(
-              this.httpService.post('http://localhost:3004/api/notify-incident', {
+              this.httpService.post(`${this.notificationServiceUrl}/notify-incident`, {
                   userId,
                   status,
                   description

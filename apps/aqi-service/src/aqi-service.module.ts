@@ -60,7 +60,7 @@ import { PerceivedAirQuality } from './entities/perceived-air-quality.entity';
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
         entities: [User, Role, IncidentType, Incident, AQGridPoint, AirQualityObservation, WeatherObservation, UrbanGreenSpace, SensitiveArea, RoadFeature, PerceivedAirQuality],
-        synchronize: configService.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
+        synchronize: configService.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
         autoLoadEntities: true,
       }),
     }),
@@ -76,7 +76,7 @@ import { PerceivedAirQuality } from './entities/perceived-air-quality.entity';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: { expiresIn: '60m' },
       }),
     }),

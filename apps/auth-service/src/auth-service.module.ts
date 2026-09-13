@@ -41,7 +41,7 @@ import { JwtModule } from '@nestjs/jwt';
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
         entities: [User, Role], 
-        synchronize: true,
+        synchronize: configService.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
         autoLoadEntities: true,
       }),
     }),
@@ -54,7 +54,7 @@ import { JwtModule } from '@nestjs/jwt';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         global: true,
-        secret: configService.get<string>('JWT_SECRET'), // 👈 Lấy an toàn
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: { expiresIn: '60m' },
       }),
     }),

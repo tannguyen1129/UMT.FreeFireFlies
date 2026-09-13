@@ -1,5 +1,5 @@
 # --- Giai đoạn 1: Build ---
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN npx nest build aqi-service
 RUN npx nest build notification-service
 
 # --- Giai đoạn 2: Production Run ---
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -29,12 +29,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 
-# Tạo thư mục uploads cho tính năng ảnh
-RUN mkdir -p uploads && chmod 777 uploads
-
-# Copy file key Firebase (cho Notification Service)
-# Lưu ý: Đường dẫn này phải khớp với nơi bạn để file key
-COPY --from=builder /app/apps/notification-service/firebase-admin-key.json ./apps/notification-service/
+# Tạo thư mục uploads; tránh cấp quyền ghi cho mọi user trong container.
+RUN mkdir -p uploads && chmod 0755 uploads
 
 # Thiết lập biến môi trường
 ENV NODE_ENV=production

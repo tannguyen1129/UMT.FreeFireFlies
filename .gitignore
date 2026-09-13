@@ -61,5 +61,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 /apps/ai/venv/
 
 /apps/notification-service/firebase-admin-key.json
+/apps/notification-service/*firebase*.json
 
 /apps/ai/.env/

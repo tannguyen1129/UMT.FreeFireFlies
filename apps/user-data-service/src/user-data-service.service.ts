@@ -30,10 +30,7 @@ export class UserDataServiceService {
   private readonly logger = new Logger(UserDataServiceService.name);
 
   private readonly orionLdSubscriptionsUrl: string;
-  
-  // 🚀 SỬA QUAN TRỌNG: Trỏ thẳng vào Notification Service (Cổng 3004)
-  // IP 172.17.0.1 là cầu nối để Docker (Orion) gọi ra ngoài Host (Service)
-  private readonly webhookUrl = 'http://172.17.0.1:3004/api/notifications/webhook';
+  private readonly webhookUrl: string;
 
   private readonly NGSI_LD_CONTEXT = [
     "https://smartdatamodels.org/context.jsonld",
@@ -51,9 +48,13 @@ export class UserDataServiceService {
       throw new Error('ORION_LD_URL is not defined in .env file');
     }
     this.orionLdSubscriptionsUrl = orionEntitiesUrl.replace('/entities', '/subscriptions');
+    this.webhookUrl = this.configService.get<string>(
+      'NOTIFICATION_WEBHOOK_URL',
+      'http://notification-service:3004/api/notifications/webhook',
+    );
 
     this.logger.log(`Orion-LD Subscriptions URL: ${this.orionLdSubscriptionsUrl}`);
-    this.logger.log(`Webhook URL (Fixed): ${this.webhookUrl}`);
+    this.logger.log(`Webhook URL: ${this.webhookUrl}`);
   }
 
   async getProfile(userId: string): Promise<Omit<User, 'password_hash'>> {

@@ -48,7 +48,7 @@ import { HttpModule } from '@nestjs/axios';
         password: configService.get<string>('DB_PASS'), 
         database: configService.get<string>('DB_NAME'),
         entities: [User, Role], 
-        synchronize: true,
+        synchronize: configService.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
         autoLoadEntities: true,
       }),
     }),
@@ -63,7 +63,7 @@ import { HttpModule } from '@nestjs/axios';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'), 
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: { expiresIn: '60m' },
       }),
     }),

@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   mongo:
     image: mongo:5.0
     container_name: fiware-mongo
-    ports:
-      - "27018:27017"
+    expose:
+      - "27017"
     volumes:
       - mongo_data:/data/db
     networks:
@@ -14,8 +12,8 @@ services:
   orion:
     image: fiware/orion-ld
     container_name: fiware-orion 
-    ports:
-      - "1026:1026"
+    expose:
+      - "1026"
     depends_on:
       - mongo
     command: -dbhost fiware-mongo -logLevel DEBUG 

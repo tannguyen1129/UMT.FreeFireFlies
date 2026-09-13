@@ -19,39 +19,47 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import * as admin from 'firebase-admin';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class NotificationServiceService implements OnModuleInit {
   private readonly logger = new Logger(NotificationServiceService.name);
    
-  // Hãy thay 'fiware-orion' bằng tên service của Orion trong file docker-compose.yml của bạn.
-  private readonly ORION_URL = 'http://fiware-orion:1026/ngsi-ld/v1/entities';
+  private readonly orionUrl: string;
+  private readonly firebaseServiceAccountPath: string;
 
   private lastSentTime: Map<string, number> = new Map();
   private readonly COOLDOWN_MS = 30 * 60 * 1000; 
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {
+    this.orionUrl = this.configService.getOrThrow<string>('ORION_LD_URL');
+    this.firebaseServiceAccountPath = this.configService.get<string>(
+      'FIREBASE_SERVICE_ACCOUNT_PATH',
+      path.join(process.cwd(), 'apps/notification-service/firebase-admin-key.json'),
+    );
+  }
 
   onModuleInit() {
     try {
-      // process.cwd() trong container thường là /app
-      const serviceAccountPath = path.join(process.cwd(), 'apps/notification-service/firebase-admin-key.json');
+      this.logger.log(`🔍 Đang tìm Firebase credential tại đường dẫn đã cấu hình.`);
 
-      this.logger.log(`🔍 Đang tìm key tại: ${serviceAccountPath}`);
-
-      if (!fs.existsSync(serviceAccountPath)) {
-         throw new Error(`❌ File key KHÔNG TỒN TẠI tại: ${serviceAccountPath}`);
+      if (!fs.existsSync(this.firebaseServiceAccountPath)) {
+         throw new Error('❌ Firebase credential file không tồn tại');
       }
 
-      const rawData = fs.readFileSync(serviceAccountPath, 'utf-8');
+      const rawData = fs.readFileSync(this.firebaseServiceAccountPath, 'utf-8');
       const serviceAccount = JSON.parse(rawData);
 
-      if (!admin.apps.length) {
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+      if (!getApps().length) {
+        initializeApp({
+          credential: cert(serviceAccount),
         });
         this.logger.log('✅ Firebase Admin Initialized successfully');
       }
@@ -66,7 +74,7 @@ export class NotificationServiceService implements OnModuleInit {
     try {
       // Gọi Orion
       const response = await firstValueFrom(
-        this.httpService.get(this.ORION_URL, {
+        this.httpService.get(this.orionUrl, {
           params: { type: 'AirQualityForecast', limit: 100 },
           headers: { 
             'Link': '<https://smartdatamodels.org/context.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"',
@@ -86,7 +94,7 @@ export class NotificationServiceService implements OnModuleInit {
     } catch (error) {
       // SỬA LỖI LOGGING: In ra chi tiết lỗi thay vì chỉ "Error"
       if (error.code === 'ECONNREFUSED') {
-        this.logger.error(`❌ Không thể kết nối tới Orion tại ${this.ORION_URL}. Hãy kiểm tra tên Service trong Docker Compose.`);
+        this.logger.error(`❌ Không thể kết nối tới Orion. Hãy kiểm tra ORION_LD_URL.`);
       } else {
         this.logger.error('❌ Lỗi khi tuần tra:', error.message || error);
       }
@@ -115,7 +123,7 @@ export class NotificationServiceService implements OnModuleInit {
   private async sendAlert(location: string, pm25: number, time: string) {
     this.logger.warn(`🔔 --- PHÁT HIỆN KHÔNG KHÍ XẤU TẠI ${location.toUpperCase()} ---`);
     
-    if (!admin.apps.length) {
+    if (!getApps().length) {
       this.logger.error('⚠️ Bỏ qua gửi thông báo vì Firebase chưa khởi tạo thành công.');
       return;
     }
@@ -129,7 +137,7 @@ export class NotificationServiceService implements OnModuleInit {
     };
 
     try {
-      await admin.messaging().send({
+      await getMessaging().send({
           notification: message.notification as any,
           topic: message.topic,
       });
@@ -141,7 +149,7 @@ export class NotificationServiceService implements OnModuleInit {
   }
 
   async sendIncidentNotification(userId: string, status: string, description: string) {
-    if (!admin.apps.length) return;
+    if (!getApps().length) return;
 
     let title = 'Cập nhật Sự cố';
     let bodyMsg = `Báo cáo "${description}" của bạn đã được cập nhật.`;
@@ -166,7 +174,7 @@ export class NotificationServiceService implements OnModuleInit {
     };
 
     try {
-      await admin.messaging().send(message);
+      await getMessaging().send(message);
       this.logger.log(`🚀 Đã gửi FCM tới user_${userId}: ${status}`);
     } catch (error) {
       this.logger.error(`❌ Lỗi gửi FCM Incident:`, error);

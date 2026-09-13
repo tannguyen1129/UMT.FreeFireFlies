@@ -18,6 +18,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AqiServiceController } from './aqi-service.controller';
 import { AqiServiceService } from './aqi-service.service';
+import { RoutePlannerService } from './route-planner.service';
 
 describe('AqiServiceController', () => {
   let aqiServiceController: AqiServiceController;
@@ -25,15 +26,16 @@ describe('AqiServiceController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AqiServiceController],
-      providers: [AqiServiceService],
+      providers: [
+        { provide: AqiServiceService, useValue: {} },
+        { provide: RoutePlannerService, useValue: {} },
+      ],
     }).compile();
 
     aqiServiceController = app.get<AqiServiceController>(AqiServiceController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(aqiServiceController.getHello()).toBe('Hello World!');
-    });
+  it('should be defined', () => {
+    expect(aqiServiceController).toBeDefined();
   });
 });
