@@ -26,6 +26,7 @@ import { Incident } from './entities/incident.entity';
 import { CreateIncidentDto } from './dto/create-incident.dto';
 import { AirQualityObservation } from './entities/air-quality-observation.entity';
 import { WeatherObservation } from './entities/weather-observation.entity';
+import { AQGridPoint } from './entities/aq-grid-point.entity';
 import { UrbanGreenSpace } from './entities/urban-green-space.entity';
 import { IncidentType } from './entities/incident-type.entity'; 
 import { SensitiveArea } from './entities/sensitive-area.entity';
@@ -76,6 +77,8 @@ export class AqiServiceService implements OnModuleInit {
     private readonly observationRepository: Repository<AirQualityObservation>,
     @InjectRepository(WeatherObservation) 
     private readonly weatherRepository: Repository<WeatherObservation>,
+    @InjectRepository(AQGridPoint)
+    private readonly gridPointRepository: Repository<AQGridPoint>,
     @InjectRepository(UrbanGreenSpace)
     private readonly greenSpaceRepository: Repository<UrbanGreenSpace>,
     @InjectRepository(SensitiveArea)
@@ -160,13 +163,11 @@ export class AqiServiceService implements OnModuleInit {
         
         const owmData = list[0]; 
 
-        const entityId = `urn:ngsi-ld:AirQualityStation:OWM-${gridPoint.id}`;
-        const location = { lat: gridPoint.lat, lon: gridPoint.lon };
-        
-        const observationEntity = this.formatOwmToAqiEntity(owmData, entityId, location);
+        const researchGridPoint = await this.getOrCreateGridPoint(gridPoint);
+        const observationEntity = this.formatOwmToAqiEntity(owmData, researchGridPoint);
         
         if (observationEntity) {
-          await this.observationRepository.save(observationEntity);
+          await this.upsertAirQualityObservation(observationEntity);
           const ngsiLdPayload = this.formatObservationToNgsiLd(observationEntity);
           await this.syncToOrionLD(ngsiLdPayload); 
           savedCount++;
@@ -262,13 +263,11 @@ export class AqiServiceService implements OnModuleInit {
           continue;
         }
         
-        const entityId = `urn:ngsi-ld:WeatherObservation:OWM-${gridPoint.id}`;
-        const location = { lat: gridPoint.lat, lon: gridPoint.lon };
-
-        const observationEntity = this.formatOwmToWeatherEntity(weatherData, entityId, location);
+        const researchGridPoint = await this.getOrCreateGridPoint(gridPoint);
+        const observationEntity = this.formatOwmToWeatherEntity(weatherData, researchGridPoint);
         
         if (observationEntity) {
-          await this.weatherRepository.save(observationEntity);
+          await this.upsertWeatherObservation(observationEntity);
           const ngsiLdPayload = this.formatWeatherToNgsiLd(observationEntity);
           await this.syncToOrionLD(ngsiLdPayload); 
           savedCount++;
@@ -432,31 +431,32 @@ export class AqiServiceService implements OnModuleInit {
   }
   
   private formatOwmToAqiEntity(
-    owmData: any, 
-    entityId: string, 
-    location: { lat: number, lon: number }
+    owmData: any,
+    gridPoint: AQGridPoint,
   ): AirQualityObservation | null {
     
     if (!owmData || !owmData.components || !owmData.dt) {
-      this.logger.warn(`Invalid OWM data received for ${entityId}, skipping.`);
+      this.logger.warn(`Invalid OWM data received for ${gridPoint.code}, skipping.`);
       return null;
     }
     const obs = new AirQualityObservation();
-    
-    obs.entity_id = entityId; 
-    obs.time = new Date(owmData.dt * 1000); 
-    obs.location = {
-      type: 'Point',
-      coordinates: [location.lon, location.lat],
-    };
+
+    obs.gridPoint = gridPoint;
+    obs.gridPointId = gridPoint.id;
+    obs.source = 'openweathermap';
+    obs.sourceObservedAt = new Date(owmData.dt * 1000);
 
     // Map các thành phần
-    obs.pm2_5 = owmData.components.pm2_5;
-    obs.pm10 = owmData.components.pm10;
-    obs.no2 = owmData.components.no2;
-    obs.so2 = owmData.components.so2;
-    obs.o3 = owmData.components.o3;
-    obs.aqi = owmData.main.aqi;
+    obs.pm2_5 = owmData.components.pm2_5 ?? null;
+    obs.pm10 = owmData.components.pm10 ?? null;
+    obs.co = owmData.components.co ?? null;
+    obs.no = owmData.components.no ?? null;
+    obs.no2 = owmData.components.no2 ?? null;
+    obs.so2 = owmData.components.so2 ?? null;
+    obs.o3 = owmData.components.o3 ?? null;
+    obs.nh3 = owmData.components.nh3 ?? null;
+    obs.aqi = owmData.main?.aqi ?? null;
+    obs.rawPayload = owmData;
     return obs;
   }
   
@@ -484,21 +484,95 @@ export class AqiServiceService implements OnModuleInit {
   }
 
   private formatOwmToWeatherEntity(
-    weatherData: any, 
-    entityId: string, 
-    location: { lat: number, lon: number }
+    weatherData: any,
+    gridPoint: AQGridPoint,
   ): WeatherObservation | null {
-    const obs = new WeatherObservation();
-    obs.entity_id = entityId; 
-    obs.time = new Date(weatherData.dt * 1000); 
-    obs.location = { type: 'Point', coordinates: [location.lon, location.lat] };
+    if (!weatherData?.dt) {
+      this.logger.warn(`Invalid OWM weather data received for ${gridPoint.code}, skipping.`);
+      return null;
+    }
 
-    obs.temperature = weatherData.main?.temp;
-    obs.relativeHumidity = weatherData.main?.humidity; // camelCase
-    obs.windSpeed = weatherData.wind?.speed;           // camelCase
-    obs.windDirection = weatherData.wind?.deg;         // camelCase
+    const obs = new WeatherObservation();
+    obs.gridPoint = gridPoint;
+    obs.gridPointId = gridPoint.id;
+    obs.source = 'openweathermap';
+    obs.sourceObservedAt = new Date(weatherData.dt * 1000);
+    obs.temperature = weatherData.main?.temp ?? null;
+    obs.humidity = weatherData.main?.humidity ?? null;
+    obs.pressure = weatherData.main?.pressure ?? null;
+    obs.windSpeed = weatherData.wind?.speed ?? null;
+    obs.windDirection = weatherData.wind?.deg ?? null;
+    obs.clouds = weatherData.clouds?.all ?? null;
+    obs.rain = weatherData.rain?.['1h'] ?? weatherData.rain?.['3h'] ?? null;
+    obs.rawPayload = weatherData;
     
     return obs;
+  }
+
+  private async getOrCreateGridPoint(gridPoint: {
+    id: string;
+    lat: number;
+    lon: number;
+  }): Promise<AQGridPoint> {
+    const code = `HCMC-OLP-${gridPoint.id}`;
+    await this.gridPointRepository.upsert(
+      {
+        code,
+        name: gridPoint.id,
+        latitude: gridPoint.lat,
+        longitude: gridPoint.lon,
+        source: 'openweathermap',
+        gridVersion: 'hcmc-olp-v0',
+        active: true,
+      },
+      ['code'],
+    );
+
+    return this.gridPointRepository.findOneByOrFail({ code });
+  }
+
+  private async upsertAirQualityObservation(
+    observation: AirQualityObservation,
+  ): Promise<void> {
+    await this.observationRepository.upsert(
+      {
+        gridPointId: observation.gridPointId,
+        source: observation.source,
+        sourceObservedAt: observation.sourceObservedAt,
+        aqi: observation.aqi,
+        pm2_5: observation.pm2_5,
+        pm10: observation.pm10,
+        co: observation.co,
+        no: observation.no,
+        no2: observation.no2,
+        o3: observation.o3,
+        so2: observation.so2,
+        nh3: observation.nh3,
+        rawPayload: observation.rawPayload,
+      },
+      ['source', 'gridPointId', 'sourceObservedAt'],
+    );
+  }
+
+  private async upsertWeatherObservation(
+    observation: WeatherObservation,
+  ): Promise<void> {
+    await this.weatherRepository.upsert(
+      {
+        gridPointId: observation.gridPointId,
+        source: observation.source,
+        sourceObservedAt: observation.sourceObservedAt,
+        temperature: observation.temperature,
+        humidity: observation.humidity,
+        pressure: observation.pressure,
+        windSpeed: observation.windSpeed,
+        windDirection: observation.windDirection,
+        clouds: observation.clouds,
+        rain: observation.rain,
+        rawPayload: observation.rawPayload,
+      },
+      ['source', 'gridPointId', 'sourceObservedAt'],
+    );
   }
 
   private formatSensitiveAreaToNgsiLd(entity: SensitiveArea): any {
@@ -515,12 +589,15 @@ export class AqiServiceService implements OnModuleInit {
   // HELPER MỚI: Format Dữ liệu Thời tiết (sang NGSI-LD)
   private formatWeatherToNgsiLd(obs: WeatherObservation): any {
     const payload = {
-      id: obs.entity_id,
+      id: `urn:ngsi-ld:WeatherObservation:OWM-${obs.gridPoint.code}`,
       type: 'WeatherObserved', 
-      location: { type: 'GeoProperty', value: obs.location },
-      dateObserved: { type: 'Property', value: { '@type': 'DateTime', '@value': obs.time.toISOString() } },
+      location: { type: 'GeoProperty', value: {
+        type: 'Point',
+        coordinates: [obs.gridPoint.longitude, obs.gridPoint.latitude],
+      } },
+      dateObserved: { type: 'Property', value: { '@type': 'DateTime', '@value': obs.sourceObservedAt.toISOString() } },
       temperature: { type: 'Property', value: obs.temperature, unitCode: 'CEL' }, 
-      relativeHumidity: { type: 'Property', value: (obs.relativeHumidity || 0) / 100 }, 
+      relativeHumidity: { type: 'Property', value: obs.humidity === null ? null : obs.humidity / 100 },
       windSpeed: { type: 'Property', value: obs.windSpeed, unitCode: 'MTS' }, 
       windDirection: { type: 'Property', value: obs.windDirection }, 
       '@context': this.NGSI_LD_CONTEXT,
@@ -543,10 +620,13 @@ export class AqiServiceService implements OnModuleInit {
 
   private formatObservationToNgsiLd(obs: AirQualityObservation): any {
     const payload = {
-      id: obs.entity_id,
+      id: `urn:ngsi-ld:AirQualityObservation:OWM-${obs.gridPoint.code}`,
       type: 'AirQualityObserved',
-      location: { type: 'GeoProperty', value: obs.location },
-      dateObserved: { type: 'Property', value: { '@type': 'DateTime', '@value': obs.time.toISOString() } },
+      location: { type: 'GeoProperty', value: {
+        type: 'Point',
+        coordinates: [obs.gridPoint.longitude, obs.gridPoint.latitude],
+      } },
+      dateObserved: { type: 'Property', value: { '@type': 'DateTime', '@value': obs.sourceObservedAt.toISOString() } },
       aqi: { type: 'Property', value: obs.aqi },
       pm25: { type: 'Property', value: obs.pm2_5, unitCode: 'µg/m³' },
       pm10: { type: 'Property', value: obs.pm10, unitCode: 'µg/m³' },
@@ -818,9 +898,9 @@ export class AqiServiceService implements OnModuleInit {
     // 1. XU HƯỚNG AQI (24 Giờ qua)
     const trendData = await this.observationRepository
       .createQueryBuilder('obs')
-      .select("DATE_TRUNC('hour', obs.time)", 'hour')
+      .select("DATE_TRUNC('hour', obs.source_observed_at)", 'hour')
       .addSelect('AVG(obs.pm2_5)', 'avg_pm25')
-      .where("obs.time > NOW() - INTERVAL '24 hours'")
+      .where("obs.source_observed_at > NOW() - INTERVAL '24 hours'")
       .groupBy('hour')
       .orderBy('hour', 'ASC')
       .getRawMany();
@@ -838,10 +918,11 @@ export class AqiServiceService implements OnModuleInit {
     // Bước 3a: Lấy PM2.5 trung bình hiện tại của từng trạm
     const stationStats = await this.observationRepository
       .createQueryBuilder('obs')
-      .select('obs.entity_id', 'entity_id')
+      .innerJoin('obs.gridPoint', 'grid')
+      .select('grid.code', 'grid_code')
       .addSelect('AVG(obs.pm2_5)', 'avg_pm25')
-      .where("obs.time > NOW() - INTERVAL '1 hour'") // Lấy trung bình 1 giờ qua
-      .groupBy('obs.entity_id')
+      .where("obs.source_observed_at > NOW() - INTERVAL '1 hour'") // Lấy trung bình 1 giờ qua
+      .groupBy('grid.code')
       .getRawMany();
     
       // LOG RA ĐỂ DEBUG
@@ -858,12 +939,11 @@ export class AqiServiceService implements OnModuleInit {
 
     // Bước 3c: Gộp lại (Join trong code)
     const correlationData = stationStats.map((stat) => {
-      const roadData = roadFeatures.find((r) => r.entity_id === stat.entity_id);
-      // Lấy tên quận từ ID (urn:ngsi-ld:...:OWM-ThuDuc -> ThuDuc)
-      const districtName = stat.entity_id.split('-').pop();
+      const legacyGridId = stat.grid_code.replace('HCMC-OLP-', '');
+      const roadData = roadFeatures.find((r) => r.entity_id.endsWith(`OWM-${legacyGridId}`));
       
       return {
-        district: districtName,
+        district: legacyGridId,
         pm25: parseFloat(stat.avg_pm25), // Ép kiểu về số
         roadCount: roadData ? roadData.majorRoadCount : 0,
       };

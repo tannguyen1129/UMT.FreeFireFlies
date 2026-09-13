@@ -88,3 +88,7 @@ The stack declares three Docker named volumes:
 
 Removing these volumes can permanently destroy research data. Do not use
 `docker compose down --volumes` for this deployment.
+
+On a new PostgreSQL volume, scripts under `postgres/init/` create the research
+schema. These bootstrap scripts do not rerun against a populated volume.
+TypeORM schema synchronization is disabled for the research deployment.

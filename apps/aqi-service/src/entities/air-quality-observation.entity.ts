@@ -1,37 +1,76 @@
-import { Entity, PrimaryColumn, Column } from 'typeorm';
-import type { Point } from 'geojson';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  Unique,
+} from 'typeorm';
+import { AQGridPoint } from './aq-grid-point.entity';
 
 @Entity({ name: 'air_quality_observations' })
+@Unique('uq_air_quality_source_grid_observed', [
+  'source',
+  'gridPointId',
+  'sourceObservedAt',
+])
+@Index('idx_air_quality_grid_observed', ['gridPointId', 'sourceObservedAt'])
+@Index('idx_air_quality_ingested_at', ['ingestedAt'])
 export class AirQualityObservation {
-  @PrimaryColumn({ type: 'timestamptz' })
-  time: Date;
+  @PrimaryGeneratedColumn({ type: 'bigint' })
+  id: string;
 
-  @PrimaryColumn({ type: 'varchar', length: 255 })
-  entity_id: string; // ví dụ: urn:ngsi-ld:AirQualityStation:VN-HCM-01
+  @Column({ name: 'grid_point_id', type: 'uuid' })
+  gridPointId: string;
 
-  @Column({
-    type: 'geography', // Dùng PostGIS
-    spatialFeatureType: 'Point',
-    srid: 4326,
-    nullable: true,
+  @ManyToOne(() => AQGridPoint, (gridPoint) => gridPoint.airQualityObservations, {
+    nullable: false,
+    onDelete: 'RESTRICT',
   })
-  location: Point;
+  @JoinColumn({ name: 'grid_point_id' })
+  gridPoint: AQGridPoint;
 
-  @Column({ type: 'float', nullable: true })
-  pm2_5: number;
+  @Column({ type: 'varchar', length: 64 })
+  source: string;
 
-  @Column({ type: 'float', nullable: true })
-  pm10: number;
+  @Column({ name: 'source_observed_at', type: 'timestamptz' })
+  sourceObservedAt: Date;
 
-  @Column({ type: 'float', nullable: true })
-  no2: number;
+  @CreateDateColumn({ name: 'ingested_at', type: 'timestamptz' })
+  ingestedAt: Date;
 
-  @Column({ type: 'float', nullable: true })
-  so2: number;
+  @Column({ type: 'smallint', nullable: true })
+  aqi: number | null;
 
-  @Column({ type: 'float', nullable: true })
-  o3: number;
+  @Column({ type: 'double precision', nullable: true })
+  pm2_5: number | null;
 
-  @Column({ type: 'int', nullable: true })
-  aqi: number;
+  @Column({ type: 'double precision', nullable: true })
+  pm10: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  co: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  no: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  no2: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  o3: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  so2: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  nh3: number | null;
+
+  @Column({ name: 'raw_payload', type: 'jsonb' })
+  rawPayload: any;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
 }
