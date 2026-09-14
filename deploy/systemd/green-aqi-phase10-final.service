@@ -1,0 +1,13 @@
+[Unit]
+Description=Green-AQI Phase 10 final stability gate
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/green-aqi/src/UMT.FreeFireFlies
+ExecStart=/opt/green-aqi/src/UMT.FreeFireFlies/deploy/scripts/phase10-stability-check.sh
+StandardOutput=journal
+StandardError=journal

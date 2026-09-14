@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Green-AQI Phase 10 gate after 24 continuous hours
+
+[Timer]
+OnCalendar=2026-09-15 05:25:00 UTC
+Persistent=true
+Unit=green-aqi-phase10-final.service
+
+[Install]
+WantedBy=timers.target

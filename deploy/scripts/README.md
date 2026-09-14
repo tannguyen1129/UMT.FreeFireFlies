@@ -36,3 +36,9 @@ See `deploy/BACKUP.md` for operator instructions and safety constraints.
 Checks host listeners, Docker port publications, SSH authentication settings,
 and local secret-file permissions. See `deploy/SECURITY.md` for the required
 Hetzner Firewall and safe SSH/VPN hardening procedure.
+
+## `phase10-stability-check.sh`
+
+Runs the final 24-hour stability gate. It requires every research container to
+have at least 24 hours of continuous uptime and validates health, timestamps,
+duplicates, UTC, MongoDB persistence, backup status, Drive upload, and security.
